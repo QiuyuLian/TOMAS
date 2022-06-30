@@ -16,7 +16,11 @@ Contents
 
 .. toctree::
 
-   usage
+   tutorials
+   installation
    api
+   contributors
+   references
+   
 
-docs/source/index.rst
+
