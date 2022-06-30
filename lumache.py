@@ -1,5 +1,5 @@
 """
-Lumache - Python library for cooks and food lovers.
+TOMAS - Python library for single-cell data analysis.
 """
 
 __version__ = "0.1.0"
