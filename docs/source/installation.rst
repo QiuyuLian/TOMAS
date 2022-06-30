@@ -3,8 +3,6 @@ Installation
 
 .. _installation:
 
-Installation
-------------
 
 To use TOMAS, first install it using pip:
 
