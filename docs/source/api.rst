@@ -8,16 +8,29 @@ Import TOMAS as tm:
 >>> import TOMAS as tm
 
 
-Ratio:
-------
+.. module:: tomas
 
 
-Fitting each group of homotypic droplets with Dirichlet-Multinomial + logNoraml distribution.
+Ratio
+-----
+
+Combining AnnData objects. See also the section on concatenation.
 
 .. autosummary::
+   :toctree: generated/
 
-	initialize_alpha
-	optimize_alpha
+   tomas.ratio.auxi.initialize_alpha
+   tomas.ratio.auxi.lgammaVec
 
+
+RC analysis
+-----------
+
+Reading anndata’s native file format `.h5ad`.
+
+.. autosummary::
+   :toctree: generated/
+
+   tomas.ratio.auxi.visualize_alpha_optimization
 
 

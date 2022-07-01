@@ -19,7 +19,6 @@ Contents
    tutorials
    installation
    api
-   simpleble
    contributors
    references
    
