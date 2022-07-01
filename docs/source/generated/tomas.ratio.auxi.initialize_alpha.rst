@@ -1,6 +1,6 @@
 ﻿tomas.ratio.auxi.initialize\_alpha
 ==================================
 
-.. currentmodule:: tomas.ratio.auxi
+.. module:: tomas
 
-.. autofunction:: initialize_alpha
+.. autofunction:: tomas.ratio.auxi.initialize_alpha

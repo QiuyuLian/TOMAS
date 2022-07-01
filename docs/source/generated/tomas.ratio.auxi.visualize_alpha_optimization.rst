@@ -1,6 +1,6 @@
 ﻿tomas.ratio.auxi.visualize\_alpha\_optimization
 ===============================================
 
-.. currentmodule:: tomas.ratio.auxi
+.. module:: tomas
 
-.. autofunction:: visualize_alpha_optimization
+.. autofunction:: tomas.ratio.auxi.visualize_alpha_optimization

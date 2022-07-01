@@ -1,6 +1,6 @@
 ﻿tomas.ratio.auxi.lgammaVec
 ==========================
 
-.. currentmodule:: tomas.ratio.auxi
+.. module:: tomas
 
-.. autofunction:: lgammaVec
+.. autofunction:: tomas.ratio.auxi.lgammaVecs
