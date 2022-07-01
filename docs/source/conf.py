@@ -8,6 +8,26 @@ import sys
 sys.path.insert(0,os.path.abspath('../../'))
 
 
+
+#from pathlib import Path
+
+
+#from sphinx.application import Sphinx
+
+#HERE = Path(__file__).parent
+#sys.path[:0] = [str(HERE.parent)]
+
+
+
+
+
+
+# -- General configuration ------------------------------------------------
+
+needs_sphinx = "5.0.2"  # autosummary bugfix
+
+
+
 # -- Project information
 
 project = 'TOMAS'
