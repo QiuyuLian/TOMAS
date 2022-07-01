@@ -5,7 +5,7 @@
 
 import os
 import sys
-sys.path.insert(0,os.path.abspath('/home/qy/Documents/TOMAS/'))
+sys.path.insert(0,os.path.abspath('../../'))
 
 
 # -- Project information
@@ -23,7 +23,7 @@ extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
-    'sphinx_autodoc_annotation',
+    #'sphinx_autodoc_annotation',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
 ]
