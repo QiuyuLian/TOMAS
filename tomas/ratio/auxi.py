@@ -22,6 +22,8 @@ import copy
 import traceback
 
 
+
+
 #%% estiamte alpha 
 
 def initialize_alpha(Y):
