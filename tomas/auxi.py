@@ -21,7 +21,7 @@ import multiprocessing as mp
 import copy
 import traceback
 
-
+import seaborn as sns
 
 
 #%% estiamte alpha 
@@ -1172,7 +1172,7 @@ def get_mg(raw_Alpha1, raw_Alpha2, merging_threshold=1, skip_threshold=2, alphaM
 
 #%% debug
 
-import seaborn as sns
+
 
 def test_one_sample(Alpha1, Alpha2, w, w_mode = 'sampling', l_m_mix=2.1, l_std_mix=0.2,**para):
     """
