@@ -8,6 +8,8 @@ Import TOMAS as tm:
 >>> import TOMAS as tm
 
 
+.. module:: tomas
+
 
 lumache
 -------
