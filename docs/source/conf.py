@@ -40,6 +40,8 @@ extensions = [
     'sphinx.ext.autodoc',
     #'sphinx_autodoc_annotation',
     'sphinx.ext.autosummary',
+    'sphinx.ext.napoleon',
+    'sphinx_autodoc_typehints',  # needs to be after napoleon
     'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
 ]
@@ -71,5 +73,24 @@ html_show_sphinx = False
 
 autosummary_generate = True
 autodoc_member_order = 'bysource'
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_use_rtype = True  # having a separate entry generally helps readability
+napoleon_use_param = True
+napoleon_custom_sections = [('Params', 'Parameters')]
+
+typehints_defaults = 'braces'
+
+
+
+
+
+
+
+
+
+
+
 
 
