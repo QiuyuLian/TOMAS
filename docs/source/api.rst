@@ -9,6 +9,16 @@ Import TOMAS as tm:
 
 
 
+lumache
+-------
+
+test if this works
+
+.. autosummary::
+   :toctree: generated/
+   
+   tomas.lumache.get_random_ingredients
+
 
 
 Ratio
