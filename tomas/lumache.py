@@ -1,7 +1,7 @@
 """
 Lumache - Python library for cooks and food lovers.
 """
-
+import numpy as np
 
 def get_random_ingredients(kind=None):
     """
@@ -27,5 +27,6 @@ def initialize_alpha(Y=1):
     :return: 1
     :rtype: int
     """
-  
+    Y = np.zeros(1)
+    
     return 1
