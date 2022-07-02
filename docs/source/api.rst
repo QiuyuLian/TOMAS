@@ -21,6 +21,7 @@ test if this works
    
    tomas.lumache.get_random_ingredients
    tomas.lumache.initialize_alpha
+   tomas.lumache.lgammaVec
 
 
 

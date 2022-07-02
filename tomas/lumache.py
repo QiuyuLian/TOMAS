@@ -2,6 +2,8 @@
 Lumache - Python library for cooks and food lovers.
 """
 import numpy as np
+from scipy.special import loggamma, gammaln
+
 
 def get_random_ingredients(kind=None):
     """
@@ -24,7 +26,7 @@ def initialize_alpha(Y=1):
 
     :param Y: Optional "kind" of ingredients.
     :type Y: list[str] or None
-    :return: 1
+    :return: 10
     :rtype: int
     """
     gene_tot = np.ravel(np.sum(Y, axis=0))
@@ -48,3 +50,25 @@ def initialize_alpha(Y=1):
     alpha[alpha == 0.0] = 1e-6
     
     return 10
+
+
+
+
+def lgammaVec(inVec):
+    """
+    test import numpy.
+
+    :param inVec: Optional "kind" of ingredients.
+    :type inVec: list[str] or None
+    :return: 1
+    :rtype: list(float)
+    """
+    
+    outVec = gammaln(inVec)
+    idx_inf = np.isinf(outVec)
+    outVec[idx_inf] = 709.1962086421661
+    # lnGamma(1e-308) = 709.1962086421661, lnGamma(1e-309) = inf
+    # if val is closer than 1e-308 to 0, e.g. 1e-309, inf will be returned 
+    # we would truncate it to a certain number: here it's lnGamma(1e-308)
+    return outVec
+
