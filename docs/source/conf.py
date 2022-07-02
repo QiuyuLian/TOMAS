@@ -5,28 +5,9 @@
 
 import os
 import sys
+
 sys.path.insert(0,os.path.abspath('../../'))
 import tomas
-
-
-
-#from pathlib import Path
-
-
-#from sphinx.application import Sphinx
-
-#HERE = Path(__file__).parent
-#sys.path[:0] = [str(HERE.parent)]
-
-
-
-
-
-
-# -- General configuration ------------------------------------------------
-
-needs_sphinx = "5.0.2"  # autosummary bugfix
-
 
 
 # -- Project information
@@ -38,7 +19,20 @@ author = 'Qiuyu Lian'
 release = '0.1'
 version = '0.1.0'
 
-# -- General configuration
+
+# -- General configuration ------------------------------------------------
+
+nitpicky = True  # If true, Sphinx will warn about all references where the target cannot be found. 
+needs_sphinx = '2.0'  
+
+# default settings
+templates_path = ["_templates"]
+#html_static_path = ["_static"]
+source_suffix = ".rst"
+master_doc = "index"
+default_role = "literal"
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+pygments_style = "sphinx"
 
 extensions = [
     'sphinx.ext.duration',
@@ -55,11 +49,17 @@ intersphinx_mapping = {
 }
 intersphinx_disabled_domains = ['std']
 
-templates_path = ['_templates']
+
 
 # -- Options for HTML output
 
 html_theme = 'sphinx_rtd_theme'
 
-# -- Options for EPUB output
-epub_show_urls = 'footnote'
+
+
+# Generate the API documentation when building
+
+autosummary_generate = True
+autodoc_member_order = 'bysource'
+
+
