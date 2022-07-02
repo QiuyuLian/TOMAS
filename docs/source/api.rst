@@ -29,8 +29,8 @@ Combining AnnData objects. See also the section on concatenation.
 .. autosummary::
    :toctree: generated/
 
-   tomas.ratio.auxi.initialize_alpha
-   tomas.ratio.auxi.lgammaVec
+   tomas.auxi.initialize_alpha
+   tomas.auxi.lgammaVec
 
 
 RC analysis
@@ -41,6 +41,6 @@ Reading anndata’s native file format `.h5ad`.
 .. autosummary::
    :toctree: generated/
 
-   tomas.ratio.auxi.visualize_alpha_optimization
+   tomas.auxi.visualize_alpha_optimization
 
 
