@@ -45,5 +45,6 @@ Reading anndata’s native file format `.h5ad`.
    :toctree: generated/
 
    tomas.auxi.visualize_alpha_optimization
+   tomas.auxi.job_estimateW
 
 

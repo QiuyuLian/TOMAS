@@ -40,6 +40,7 @@ extensions = [
     'sphinx.ext.autodoc',
     #'sphinx_autodoc_annotation',
     'sphinx.ext.autosummary',
+    'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
 ]
 
