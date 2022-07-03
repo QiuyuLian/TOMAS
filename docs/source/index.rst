@@ -3,8 +3,6 @@ Welcome to TOMAS's documentation!
 
 **TOMAS** is a Python library for xxxx.
 
-Check out the :doc:`tutorials` section for further information and
-how to :ref:`installation` the project.
 
 .. note::
 
@@ -31,6 +29,10 @@ How
 
 Basically, we ....
 Details see our paper.
+
+Check out the :doc:`tutorials` section for further information and
+how to :ref:`installation` the project.
+
 
 
 Citate us

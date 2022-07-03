@@ -5,8 +5,8 @@ We provide xxx tutorials, such as :ref:`notebook/demo_simulator.ipynb`
 
 
 
-Basic condition
----------------
+Total mRNA ratio inference
+--------------------------
 
 .. toctree::
    :maxdepth:1
@@ -14,15 +14,15 @@ Basic condition
    test
    
    
-Only scRNA-seq data
--------------------
+Total-mRNA-aware differential analysis
+--------------------------------------
 
 xxx
 
 
 
-Simulator
----------
+Total-mRNA-aware scRNA-seq simlator
+-----------------------------------
 
 .. toctree::
    :maxdepth:1
@@ -30,8 +30,8 @@ Simulator
    test
    
    
-Run with Pantheon
------------------
+Graphical interface
+-------------------
 
 xxxxxxxx
 
