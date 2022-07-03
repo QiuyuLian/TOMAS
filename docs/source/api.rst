@@ -19,21 +19,21 @@ test if this works
 .. autosummary::
    :toctree: generated/
    
-   tomas.lumache.get_random_ingredients
-   tomas.lumache.initialize_alpha
+   tomas.lumache.lgammaVec
+   tomas.lumache.lgammaVec
    tomas.lumache.lgammaVec
 
 
-Ratio
------
+Estimation
+----------
 
 Combining AnnData objects. See also the section on concatenation.
 
 .. autosummary::
    :toctree: generated/
 
-   tomas.auxi.initialize_alpha
-   tomas.auxi.lgammaVec
+   tomas.lumache.lgammaVec
+   tomas.lumache.lgammaVec
 
 
 RC analysis
@@ -44,7 +44,7 @@ Reading anndata’s native file format `.h5ad`.
 .. autosummary::
    :toctree: generated/
 
-   tomas.auxi.visualize_alpha_optimization
-   tomas.auxi.job_estimateW
+   tomas.lumache.lgammaVec
+
 
 

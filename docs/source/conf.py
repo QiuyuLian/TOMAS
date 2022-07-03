@@ -31,7 +31,7 @@ needs_sphinx = '5.0'
 source_suffix = ".rst"
 master_doc = "index"
 default_role = "literal"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 pygments_style = "sphinx"
 
 extensions = [
@@ -44,7 +44,15 @@ extensions = [
     'sphinx_autodoc_typehints',  # needs to be after napoleon
     'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
+    'nbsphinx',  # Select nbsphinx and, if needed, other Sphinx extensions:
+    #'sphinxcontrib.bibtex',  # for bibliographic references
+    #'sphinxcontrib.rsvgconverter',  # for SVG->PDF conversion in LaTeX output
+    #'sphinx_gallery.load_style',  # load CSS for gallery (needs SG >= 0.6)
+    #'sphinx_last_updated_by_git',  # get "last updated" from Git
+    #'sphinx_codeautolink',  # automatic links from code to documentation
+    #'sphinx.ext.intersphinx',  # links to other Sphinx projects (e.g. NumPy)
 ]
+
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
@@ -57,7 +65,7 @@ intersphinx_disabled_domains = ['std']
 # -- Options for HTML output
 
 html_theme = 'sphinx_rtd_theme'
-html_theme_options = dict(navigation_depth=4)
+#html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
     github_user="QiuyuLian",  # Username
@@ -81,6 +89,8 @@ napoleon_use_param = True
 napoleon_custom_sections = [('Params', 'Parameters')]
 
 typehints_defaults = 'braces'
+html_sourcelink_suffix = ''  # Don't add .txt suffix to source files:
+
 
 
 

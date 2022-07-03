@@ -1,8 +1,7 @@
 Welcome to TOMAS's documentation!
 ===================================
 
-**TOMAS** is a Python library for TOtal-MRNA-Aware Single cell analysis.
-It offers a *simple* and *intuitive* API.
+**TOMAS** is a Python library for xxxx.
 
 Check out the :doc:`tutorials` section for further information and
 how to :ref:`installation` the project.
@@ -11,16 +10,46 @@ how to :ref:`installation` the project.
 
    This project is under active development.
 
-Contents
---------
+
+
+What
+----
+
+What is xxx
+
+
+
+Why
+---
+
+Why should we care about xx?
+
+
+
+How
+---
+
+Basically, we ....
+Details see our paper.
+
+
+Citate us
+---------
+
+xxx
+
+
 
 .. toctree::
+   :maxdepth: 1
+   :hidden:
 
    tutorials
    installation
    api
    contributors
    references
+
    
 
 
