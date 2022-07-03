@@ -1,7 +1,7 @@
 API
 ===
 
-**TOMAS** is a Python library for TOtal-MRNA-Aware Single cell analysis.
+**TOMAS** is a Python library for xxx.
 
 Import TOMAS as tm:
 
