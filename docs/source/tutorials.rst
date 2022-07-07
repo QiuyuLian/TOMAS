@@ -11,7 +11,7 @@ Total mRNA ratio inference
 .. toctree::
    :maxdepth:1
    
-   test
+   tutorial_ratio
    
    
 Total-mRNA-aware differential analysis
@@ -21,13 +21,13 @@ xxx
 
 
 
-Total-mRNA-aware scRNA-seq simlator
+Total-mRNA-aware scRNA-seq simulator
 -----------------------------------
 
 .. toctree::
    :maxdepth:1
    
-   test
+   demo_simulator
    
    
 Graphical interface

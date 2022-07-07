@@ -11,8 +11,8 @@ Import TOMAS as tm:
 .. module:: tomas
 
 
-lumache
--------
+Ratio estimation
+----------------
 
 test if this works
 
@@ -24,8 +24,8 @@ test if this works
    tomas.lumache.lgammaVec
 
 
-Estimation
-----------
+Ratio-corrected DE
+------------------
 
 Combining AnnData objects. See also the section on concatenation.
 
@@ -45,6 +45,18 @@ Reading anndata’s native file format `.h5ad`.
    :toctree: generated/
 
    tomas.lumache.lgammaVec
+
+
+Visualization
+-------------
+
+Reading anndata’s native file format `.h5ad`.
+
+.. autosummary::
+   :toctree: generated/
+
+   tomas.lumache.lgammaVec
+
 
 
 

@@ -35,8 +35,8 @@ how to :ref:`installation` the project.
 
 
 
-Citate us
----------
+Cite us
+-------
 
 xxx
 
