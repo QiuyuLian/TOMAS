@@ -1,8 +1,6 @@
 API
 ===
 
-**TOMAS** is a Python library for xxx.
-
 Import TOMAS as tm:
 
 >>> import TOMAS as tm
@@ -11,52 +9,76 @@ Import TOMAS as tm:
 .. module:: tomas
 
 
-Ratio estimation
-----------------
 
-test if this works
+Model fitting
+-------------
+
+Fitting Dirichlet-Multinomial(DMN) models with UMI counts of a droplet population. 
+
+.. autosummary::
+   :toctree: generated/
+
+   tomas.fit.dmn
+   tomas.fit.logN_para
+
+
+
+Total-mRNA-ratio inference
+--------------------------
+
+Inferring the total-mRNA-ratio between two cell types.
 
 .. autosummary::
    :toctree: generated/
    
-   tomas.lumache.lgammaVec
-   tomas.lumache.lgammaVec
-   tomas.lumache.lgammaVec
+   tomas.infer.ratio_2types
 
 
-Ratio-corrected DE
-------------------
+Total-mRNA-ratio-aware DE
+-------------------------
 
-Combining AnnData objects. See also the section on concatenation.
+Performing total-mRNA-ratio-aware differentail analysis.
 
 .. autosummary::
    :toctree: generated/
 
-   tomas.lumache.lgammaVec
-   tomas.lumache.lgammaVec
-
-
-RC analysis
------------
-
-Reading anndata’s native file format `.h5ad`.
-
-.. autosummary::
-   :toctree: generated/
-
-   tomas.lumache.lgammaVec
+   tomas.lrt.total_mRNA_aware_DE
+   tomas.lrt.extract_DE
+   tomas.lrt.summarize2DE
 
 
 Visualization
 -------------
 
-Reading anndata’s native file format `.h5ad`.
+.. autosummary::
+   :toctree: generated/
+
+   tomas.vis.UMI_hist
+   tomas.vis.dmn_convergence
+   tomas.vis.corrected_UMI_hist
+   tomas.vis.volcano_2DE
+   tomas.vis.violin_2DE
+
+
+Auxiliary functions
+-------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   tomas.auxi.cal_KL_bc
+   tomas.auxi.get_dbl_mg_bc
+   tomas.auxi.correctUMI
+
+
+Simulator
+-----------
+
+Total-mRNA-ratio-aware scRNA-seq data simulator.
 
 .. autosummary::
    :toctree: generated/
 
    tomas.lumache.lgammaVec
-
-
 
 

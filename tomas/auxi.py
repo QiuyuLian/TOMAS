@@ -7,105 +7,48 @@ Created on Wed Jul  6 02:41:49 2022
 """
 
 
+
+#%% meta-genes
+
+
 import pickle
 import numpy as np
 import scipy
 from scipy.special import gammaln, digamma
 import os
-
-
-
-def getExclMetaGene(raw_Alpha_1, raw_Alpha_2, count_dbl, output, num_mg = 100):
-    
-    kl = obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output)
-    mg_dic = obtain_mg(raw_Alpha_1, raw_Alpha_2, kl, kl_cutoff=1)#, merging_threshold=1, skip_threshold=2)
-
-    mg_gidx = mg_dic['mg_gidx']
-    mg_genepool = mg_dic['mg_genepool']
-    mg_alpha1 = mg_dic['alpha1']
-    mg_alpha2 = mg_dic['alpha2']
-    
-    left_gidx = list(set(range(len(raw_Alpha_1))).difference(mg_genepool)) 
-    mg_gidx.append(left_gidx)
-    
-    mg_idx = [[i] for i in range(num_mg)] + [list(range(num_mg,  len(mg_gidx)))]
-    
-    # merge alpha and counts according to meta-genes
-    mg_Alpha_arr = np.concatenate((np.array([mg_alpha1, mg_alpha2]), np.array([[sum(raw_Alpha_1)-sum(mg_alpha1)],[sum(raw_Alpha_2)-sum(mg_alpha2)]])),axis=1)
-    mg_Alpha_new = np.transpose(np.array([np.sum(mg_Alpha_arr[:,term],1) for term in mg_idx]))
-
-    if isinstance(count_dbl, scipy.sparse.csr.csr_matrix):
-        count_dbl = count_dbl.toarray()
-        
-    Y = np.transpose(np.array([np.sum(count_dbl[:,term],1) for term in mg_gidx]))
-    Y_new = np.transpose(np.array([np.sum(Y[:,term],1) for term in mg_idx]))
-    
-    
-    return mg_Alpha_new, Y_new
-    
-
-
-def obtain_mg(raw_Alpha1_0, raw_Alpha2_0, kl, kl_cutoff=1, merging_threshold=5, skip_threshold=2,alphaMin = 1):
-
-    # use genes with KL greater than cutoff to obtain meta-genes
-    KL_filter_idx = np.where(kl > kl_cutoff)[0]
-    
-    raw_Alpha1 = raw_Alpha1_0[KL_filter_idx]
-    raw_Alpha2 = raw_Alpha2_0[KL_filter_idx]
-
-    mg_dic = get_mg(raw_Alpha1, raw_Alpha2, merging_threshold, skip_threshold,alphaMin)
-    
-    mg_pool = mg_dic['mg_pool'] 
-    #balanced_mg_num = mg_dic['balanced_mg_num']
-    
-    # original idx of genes used to generate metagenes, each element is a list of gene idx
-    mg_dic['mg_gidx'] = [list(KL_filter_idx[term]) for term in mg_pool]
-    mg_dic['mg_genepool'] = [g for sub in  mg_dic['mg_gidx']  for g in sub]
-    
-    return mg_dic
-
-
+import pandas as pd
+import scanpy as sc
 import tqdm
 import multiprocessing as mp
 import math
 
 
-def job_KL(raw_Alpha_1,raw_Alpha_2,start_sidx, end_sidx):
-    
-    sub_kl = []
-    for gidx in range(start_sidx,end_sidx):
-
-        kl_1_2 = KL_Dir_miginal(raw_Alpha_1, raw_Alpha_2, gidx) 
-        kl_2_1 = KL_Dir_miginal(raw_Alpha_2, raw_Alpha_1, gidx) 
-        
-        kl = (kl_1_2+kl_2_1)/2
-        sub_kl.append(kl)
-        
-    return sub_kl
 
 
 
-def obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output, parallel=True):
+def cal_KL_bc(adata, groups, parallel=True):
     '''
-    
+    Calculate the KL-divergence of genes betweeo two Dirichlet-Multinomial distribution.
 
     Parameters
     ----------
-    raw_Alpha_1 : TYPE
-        DESCRIPTION.
-    raw_Alpha_2 : TYPE
-        DESCRIPTION.
-    filename : TYPE
-        DESCRIPTION.
-    parallel : TYPE, optional
-        DESCRIPTION. The default is True.
+    adata : AnnData
+        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
+        Rows correspond to droplets and columns to genes.
+    groups : list of strings
+        Two droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby] to which KL-divergence should be calculated with.
+    parallel : bool, optional
+        If or not to run in parallel. The default is True.
 
     Returns
     -------
-    kl : TYPE
-        DESCRIPTION.
+    None.
 
     '''
+
+    raw_Alpha_1 = adata.varm['para_diri'][groups[0]]
+    raw_Alpha_2 = adata.varm['para_diri'][groups[1]]
+    
     if parallel:
         
         tot_objs = len(raw_Alpha_1)
@@ -141,7 +84,7 @@ def obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output, parallel=True):
         
         kl = (np.array(kl_1_2)+np.array(kl_2_1))/2
     
-    
+    '''
     info = {'raw_alpha1':raw_Alpha_1,
             'raw_alpha2':raw_Alpha_2,
             'kl':kl}
@@ -149,10 +92,155 @@ def obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output, parallel=True):
     f = open(os.path.join(output,'dmn.kl.pickle'),'wb')
     pickle.dump(info,f)
     f.close()
+    '''
+    #kl = obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output)
+    adata.varm['kl'] = pd.DataFrame({groups[0]+'_'+groups[1]:kl},index=adata.var_names)    
     
-    return kl
+    #return kl
     
     
+
+
+
+def get_dbl_mg_bc(adata, groupby, groups, output, num_mg = 100, kl_cutoff=1, merging_threshold=5, skip_threshold=2,alphaMin = 1):
+    '''
+    Extract metagenes from raw UMI counts of heterotypic doublets.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
+        Rows correspond to droplets and columns to genes.
+    groupby : str
+        The key of the droplet categories stored in adata.obs. 
+    groups : list of strings
+        Specify two droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby], which form the hetero-dbl of interest.
+    output : path
+        Path to save the results.
+    num_mg : int, optional
+        Number of exclusive meta-genes. The default is 100.
+    kl_cutoff : float, optional
+        DESCRIPTION. The default is 1.
+    merging_threshold : float, optional
+        Stop merging when alpha sum of metagenes exceeds the threshold in conterpart celltype. The default is 5.
+    skip_threshold : float, optional
+         If adding a gene into current metegene leads to 'skip_threshold'-fold change of the std of alpha values,
+         this gene is skipped. The default is 2.
+    alphaMin : float, optional
+         Individual genes with alpha greater than the threshold are skipped in mergging step and considerted as a specifial metagene with one member gene. The default is 1.
+
+    Returns
+    -------
+    adata_dbl_mg_top : TYPE
+        DESCRIPTION.
+
+    '''
+    raw_Alpha1_0 = adata.varm['para_diri'][groups[0]]
+    raw_Alpha2_0 = adata.varm['para_diri'][groups[1]]
+
+    #kl = obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output)
+    #adata.varm['kl'] = pd.DataFrame({groups[0]+'_'+groups[1]:kl},index=adata.var_names)
+    kl = adata.varm['kl']
+    
+    #mg_dic = obtain_mg(raw_Alpha1_0, raw_Alpha2_0, kl, kl_cutoff=1)#, merging_threshold=1, skip_threshold=2)
+
+    # use genes with KL greater than cutoff to obtain meta-genes
+    KL_filter_idx = np.where(kl > kl_cutoff)[0]
+    
+    raw_Alpha1 = raw_Alpha1_0[KL_filter_idx]
+    raw_Alpha2 = raw_Alpha2_0[KL_filter_idx]
+
+    mg_dic = get_mg(raw_Alpha1, raw_Alpha2, merging_threshold, skip_threshold,alphaMin)
+    
+    mg_pool = mg_dic['mg_pool'] 
+    #balanced_mg_num = mg_dic['balanced_mg_num']
+    
+    # original idx of genes used to generate metagenes, each element is a list of gene idx
+    #mg_dic['mg_gidx'] = [list(KL_filter_idx[term]) for term in mg_pool]
+    #mg_dic['mg_genepool'] = [g for sub in  mg_dic['mg_gidx']  for g in sub]
+    #mg_gidx = mg_dic['mg_gidx']
+    #mg_genepool = mg_dic['mg_genepool']
+    
+    mg_gidx = [list(KL_filter_idx[term]) for term in mg_pool]
+    #mg_genepool = [g for sub in  mg_dic['mg_gidx']  for g in sub]
+    mg_genepool = [g for sub in  mg_gidx  for g in sub]
+    
+    mg_alpha1 = mg_dic['alpha1']
+    mg_alpha2 = mg_dic['alpha2']
+    
+    left_gidx = list(set(range(len(raw_Alpha1_0))).difference(mg_genepool)) 
+    mg_gidx.append(left_gidx)
+    
+
+    # merge alpha and counts according to meta-genes
+    count_dbl = adata[adata.obs[groupby]==groups[2],:].X
+    if isinstance(count_dbl, scipy.sparse.csr.csr_matrix):
+        count_dbl = count_dbl.toarray()
+        
+    mg_Alpha_arr = np.concatenate((np.array([mg_alpha1, mg_alpha2]), np.array([[sum(raw_Alpha1_0)-sum(mg_alpha1)],[sum(raw_Alpha2_0)-sum(mg_alpha2)]])),axis=1)
+    Y = np.transpose(np.array([np.sum(count_dbl[:,term],1) for term in mg_gidx]))
+    
+    adata_dbl_mg = sc.AnnData(Y)
+    adata_dbl_mg.obs_names = adata.obs_names[adata.obs['danno']=='Hetero-dbl']
+    adata_dbl_mg.varm['para_diri'] = mg_Alpha_arr.transpose()
+    #adata_dbl_mg.uns['mg_gidx'] = mg_gidx#,index=adata_dbl_mg.var_names)
+    adata_dbl_mg.write_h5ad(os.path.join(output,groups[0]+'_'+groups[1]+'_dbl_mg.h5ad'))
+        
+    # extract top num_mg 
+    topmg_idx = [[i] for i in range(num_mg)] + [list(range(num_mg,  len(mg_gidx)))]
+    mg_Alpha_new = np.transpose(np.array([np.sum(mg_Alpha_arr[:,term],1) for term in topmg_idx]))
+    Y_new = np.transpose(np.array([np.sum(Y[:,term],1) for term in topmg_idx]))
+    
+    adata_dbl_mg_top = sc.AnnData(Y_new)
+    adata_dbl_mg_top.obs_names = adata.obs_names[adata.obs['danno']=='Hetero-dbl']
+    adata_dbl_mg_top.varm['para_diri'] = mg_Alpha_new.transpose()
+    #adata_dbl_mg_top.uns['mg_gidx'] = mg_gidx[:num_mg] + [[item  for idx,val in enumerate(mg_gidx) for item in val]]#,index=adata_dbl_mg_top.var_names)
+    
+    return adata_dbl_mg_top        
+
+
+
+
+
+'''
+def obtain_mg(raw_Alpha1_0, raw_Alpha2_0, kl, kl_cutoff=1, merging_threshold=5, skip_threshold=2,alphaMin = 1):
+
+    # use genes with KL greater than cutoff to obtain meta-genes
+    KL_filter_idx = np.where(kl > kl_cutoff)[0]
+    
+    raw_Alpha1 = raw_Alpha1_0[KL_filter_idx]
+    raw_Alpha2 = raw_Alpha2_0[KL_filter_idx]
+
+    mg_dic = get_mg(raw_Alpha1, raw_Alpha2, merging_threshold, skip_threshold,alphaMin)
+    
+    mg_pool = mg_dic['mg_pool'] 
+    #balanced_mg_num = mg_dic['balanced_mg_num']
+    
+    # original idx of genes used to generate metagenes, each element is a list of gene idx
+    mg_dic['mg_gidx'] = [list(KL_filter_idx[term]) for term in mg_pool]
+    mg_dic['mg_genepool'] = [g for sub in  mg_dic['mg_gidx']  for g in sub]
+    
+    return mg_dic
+'''
+
+
+
+
+def job_KL(raw_Alpha_1,raw_Alpha_2,start_sidx, end_sidx):
+    
+    sub_kl = []
+    for gidx in range(start_sidx,end_sidx):
+
+        kl_1_2 = KL_Dir_miginal(raw_Alpha_1, raw_Alpha_2, gidx) 
+        kl_2_1 = KL_Dir_miginal(raw_Alpha_2, raw_Alpha_1, gidx) 
+        
+        kl = (kl_1_2+kl_2_1)/2
+        sub_kl.append(kl)
+        
+    return sub_kl
+
+
+
     
 def KL_Dir_miginal(alpha1, alpha2, gidx):
     
@@ -381,4 +469,94 @@ def get_mg(raw_Alpha1, raw_Alpha2, merging_threshold=1, skip_threshold=2, alphaM
               #'gidx_left':gidx_left}
     
     return mg_dic
+
+
+
+
+#%% correct UMI 
+
+import copy
+
+def correctUMI(adata, groupby, ratios, logUMIby=None):
+    '''
+    Correct UMI to meet the estimated total-mRNA-ratio.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
+        Rows correspond to droplets and columns to genes.
+    groupby : str
+        The key of the droplet categories stored in adata.obs. 
+    ratios : dict
+        DESCRIPTION.
+    logUMIby : str, optional
+        The key of total UMIs in log10 stored in adata.obs. The default is None.
+        
+    Returns
+    -------
+    adata_rc : TYPE
+        The corrected UMI count matrix.
+
+    '''    
+
+    groups = list(ratios.keys())
+    r_vals = list(ratios.values())
+    resortidx = np.argsort(r_vals)
+    
+    groups = [groups[v] for v in resortidx]
+    r_vals = [r_vals[v] for v in resortidx]
+
+    alpha_df = adata.varm['para_diri']
+
+    if logUMIby is None:
+
+        adata.obs['total_UMIs'] = adata.X.sum(1)[:,0]
+        adata.obs['log10_totUMIs'] = np.log10(adata.obs['total_UMIs'])
+        logUMIby = 'log10_totUMIs'
+        
+    #logN_para = [norm.fit(adata.obs[logUMIby][adata.obs[groupby]==v]) for v in groups]
+    #mu_list = [x[0] for x in logN_para]
+    #std_list = [x[1] for x in logN_para]
+    mu_list = list(adata.uns['logUMI_para'].loc[groups,'mean'])
+    
+    mat_rc = copy.deepcopy(adata.X.toarray())
+    
+    for i in range(len(groups)-1):
+        
+        print('Correct UMIs of population '+groups[i+1])
+
+        UMI_delta = 10**(mu_list[0] + np.log10(r_vals[i+1]) - mu_list[i+1])-1
+        alpha = alpha_df[groups[i+1]]
+        X_mat = copy.deepcopy(mat_rc[adata.obs[groupby]==groups[i+1],:])
+        X_mat_up = RCsampling(X_mat, alpha, UMI_delta)
+        mat_rc[adata.obs[groupby]==groups[i+1],:] = X_mat_up
+    
+    adata_rc = sc.AnnData(mat_rc)
+    #adata_rc.obs = adata.obs
+    adata_rc.var_names = adata.var_names.values.tolist()
+    adata_rc.obs_names = adata.obs_names.values.tolist()
+
+    return adata_rc
+
+
+
+def RCsampling(X_mat, alpha, UMI_delta):
+
+    if isinstance(X_mat, scipy.sparse.csr.csr_matrix):
+        X_mat = X_mat.toarray()
+
+    x_list = []
+    for cidx in tqdm.tqdm(range(X_mat.shape[0])):
+        x = X_mat[cidx]
+        p = np.random.dirichlet(alpha+x,size=1)
+        x_delta = np.random.multinomial(int(sum(x)*UMI_delta), p[0])
+        x_modified = x + x_delta
+        x_list.append(x_modified)
+
+    X_mat_up = np.array(x_list)
+    #X_mat_up_sparse = scipy.sparse.csr_matrix(X_mat_up)
+    
+    return X_mat_up#_sparse
+
 

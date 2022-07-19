@@ -1,9 +1,6 @@
 Tutorials
 =========
 
-We provide xxx tutorials, such as :ref:`notebook/demo_simulator.ipynb`
-
-
 
 Total mRNA ratio inference
 --------------------------
@@ -17,12 +14,15 @@ Total mRNA ratio inference
 Total-mRNA-aware differential analysis
 --------------------------------------
 
-xxx
-
-
+.. toctree::
+   :maxdepth:1
+   
+   tutorial_DE
+   
+   
 
 Total-mRNA-aware scRNA-seq simulator
------------------------------------
+------------------------------------
 
 .. toctree::
    :maxdepth:1

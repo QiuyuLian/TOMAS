@@ -11,18 +11,45 @@ from scipy.stats import gaussian_kde
 from scipy.stats import norm, dirichlet
 import multiprocessing as mp
 import pandas as pd
+#import scanpy as sc
 
 
-
-
-def estimateRatio(mg_Alpha_new,Y_new,output,nrepeat=10):
+def ratio_2types(adata_dbl_mg,output,nrepeat=10):
+    '''
     
+
+    Parameters
+    ----------
+    adata_dbl_mg : AnnData
+        The UMI count matrix of hetero-doublets in metagenes.
+        Rows correspond to droplets and columns to metagenes.
+    output : path
+        Path to save the results.
+    nrepeat : int, optional
+        Times to repeat synthesizing doublets to infer ratios. The default is 10.
+
+    Raises
+    ------
+    ValueError
+        If 'output' gives invalid path, raise error.
+
+    Returns
+    -------
+    esti_r_list : numpy.ndarray
+        Estimate of total mRNA ratio of each hetero-dbouelt.
+
+    '''
     if not os.path.exists(output):
         raise ValueError("Provide a valid path!")
     else:
-        logpath = os.path.join(output,'log')
-        os.makedirs(logpath)
-        
+        logpath = os.path.join(output,'rlog')
+        if not os.path.exists(logpath):
+            os.makedirs(logpath)
+    
+    
+    mg_Alpha_new = adata_dbl_mg.varm['para_diri'] .transpose()
+    Y_new = adata_dbl_mg.X
+    
     estimateW(mg_Alpha_new,Y_new,logpath,nrepeat)
         
     ll_list = []
@@ -36,7 +63,7 @@ def estimateRatio(mg_Alpha_new,Y_new,output,nrepeat=10):
     ridx = ll_argmax
     
     R_est0 = pd.read_csv(os.path.join(logpath,'Rtrack.'+str(ridx)+'.csv'),header=0,index_col=0)
-    esti_r_list = R_est0.iloc[:,-1]
+    esti_r_list = R_est0.iloc[:,-1].values
     
     #w_corrected = [ratio_correction(1/(r+1),left_mg_pmass[ct][0],left_mg_pmass[ct][1]) for r in esti_r_list]
     #r_list = [(1-w)/w for w in esti_r_list]

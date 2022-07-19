@@ -1,7 +1,7 @@
 Welcome to TOMAS's documentation!
-===================================
+=================================
 
-**TOMAS** is a Python library for xxxx.
+**TOMAS** is a Python library for total-mRNA-aware single cell RNA-seq data analysis.
 
 
 .. note::
@@ -20,7 +20,7 @@ What is xxx
 Why
 ---
 
-Why should we care about xx?
+Why should we care about total mRNA in scRNA-seq data analysis?
 
 
 

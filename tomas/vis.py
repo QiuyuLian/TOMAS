@@ -8,29 +8,62 @@ Created on Wed Jul  6 02:29:17 2022
 
 from matplotlib import pyplot as plt
 import numpy as np
+import seaborn as sns    
+from scipy import stats
+import matplotlib
+import copy
+import pandas as pd
+import os
 
 
-    
-def AlphaOptProcess(record, saveFig = False, filename=None):
+
+def dmn_convergence(group,output):
     '''
-    Visualize the optimation process of alpha.
+    Visualize the convergence of DMN optimation process.
 
     Parameters
     ----------
-    record : dict
-        intermediate variables saved by Function: estiamteAlpha.
-    saveFig : bool, optional
-        save the plot or not. The default is False.
-    filename : str, optional
-        path and name to save the plot. The default is None.
-        its form should be '/path_to_save_the_file/name_of_the_file' without suffix.
-        note: it must be specified if saveFig is True.
-        
+    group : str
+        The droplet category to display the optimization process.
+    output : path
+        The specified output path when calling fucntion 'tomas.fit.dmn'.
+
     Returns
     -------
     None.
 
     '''
+    log = pd.read_csv(os.path.join(output,group+'.dmnlog.txt'))
+
+    fig, axs =plt.subplots(1,3,figsize=(12,3),dpi=64)
+
+    plt.subplot(1,3,1)
+    plt.scatter(log.index, log['loglik'], s=1)
+    plt.xlabel('iteration')
+    plt.ylabel('logLikelihood')
+    plt.title('logLikelihood',fontsize=14)
+
+    plt.subplot(1,3,2)
+    plt.scatter(log.index, log['alpha_sum'], s=1)
+    plt.xlabel('iteration')
+    plt.ylabel('l1-norm of alpha')
+    plt.title('precision',fontsize=14)
+
+    plt.subplot(1,3,3)
+    plt.scatter(log.index, log['alpha_l2norm_delta'], s=1)
+    plt.xlabel('iteration')
+    plt.ylabel('delta ||alpha||2')
+    plt.title('delta of l2norm of alpha',fontsize=14)
+
+    fig.tight_layout()
+    plt.show()
+
+
+
+
+'''
+def alpha_opt_process(record, saveFig = False, filename=None):
+
     
     if filename is None and saveFig:
         raise ValueError("Provide a filename in the form of '/path_to_save_the_file/name_of_the_file' without suffix!")
@@ -74,15 +107,11 @@ def AlphaOptProcess(record, saveFig = False, filename=None):
         plt.savefig(filename+'.jpg',bbox_extra_artists=(tit,), bbox_inches='tight')
 
     plt.show()
+'''
+
     
-    
 
-
-
-import seaborn as sns
-from matplotlib import pyplot as plt
-
-def LogRdist(r_list,nbins=20,return_fig=None):
+def logRatio_dist(r_list,nbins=20,return_fig=None):
     
     #output = para.get('output',None)
     custom_palette = sns.color_palette("Greens",5)
@@ -93,7 +122,7 @@ def LogRdist(r_list,nbins=20,return_fig=None):
     x = np.log2(r_list)
     x_shrinkage = rm_outliers(x)
 
-    plt.figure(figsize=(6,8),dpi=256)
+    #plt.figure(figsize=(6,8),dpi=256)
     fig, (ax_box,ax_hist) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.1, .9)})
 
     sns.boxplot(data=x, ax=ax_box, orient="h",fliersize=1,color = custom_palette[4])
@@ -116,8 +145,8 @@ def LogRdist(r_list,nbins=20,return_fig=None):
     if return_fig is True:
         return fig
     plt.show()
-    
-from scipy import stats
+
+
 
 def rm_outliers(x):
     iqr = stats.iqr(x)
@@ -126,6 +155,320 @@ def rm_outliers(x):
     x_shrinkage = x[x > outlier_lb]
     x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
     return x_shrinkage#,(outlier_lb,outlier_ub)
+
+
+
+
+sns.set(style="ticks")
+
+def get_bins(x,bw=0.05):
+    return np.arange(min(x),max(x)+bw,bw)
+
+def UMI_hist(adata,x_hist='log10UMIs',groupby=None,show_groups='all',return_fig=None,**fig_para):
+    '''
+    Visualize the log-UMI-amount distribution.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
+        Rows correspond to droplets and columns to genes.
+    x_hist : str, optional
+        The key of logUMI values stroed in adata.obs. The default is 'log10UMIs'.
+    groupby : str
+        The key of the droplet categories stored in adata.obs. 
+    show_groups : list of strings, optional
+        Droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby] to display. 
+        The default is 'all'.
+    return_fig : bool, optional
+        Return the matplotlib figure. The default is None.
+    **fig_para : optional
+         Parameters to configure the plot.
+
+    Raises
+    ------
+    ValueError
+        If 'show_groups' specifies categories not matching with adata.obs[groupby].
+
+    Returns
+    -------
+    fig : matplotlib figure
+
+    '''
+    
+    obsdata = adata.obs
+    
+    bw = fig_para.get('bw',0.05)
+    fix_bins = fig_para.get('fix_bins',None)
+    fix_yticks = fig_para.get('fix_yticks',None)
+    palette = fig_para.get('palette','Set2')
+
+    xticks = np.array([3,np.log10(2000),np.log10(4000),np.log10(6000),np.log10(8000),4,\
+              np.log10(20000),np.log10(40000),np.log10(60000),np.log10(80000),5])
+    xannos = np.array(['1k','2k','4k','6k','8k','10k','20k','40k','60k','80k','100k'])
+
+    xidx = [i for i in range(len(xticks)) if xticks[i] > obsdata[x_hist].min() and xticks[i] < obsdata[x_hist].max()]
+    
+    fig = plt.figure(figsize=(6,4),dpi=64)
+    ax=plt.subplot()
+    
+    if fix_bins is None:
+        bins=get_bins(obsdata[x_hist],bw)
+    else:
+        bins=fix_bins   
+        
+    if groupby is None:
+        col_list = sns.color_palette(palette, 1)
+        plt.hist(obsdata[x_hist],bins,alpha=0.6, color=col_list[0])
+    else:
+        if show_groups == 'all':
+            show_groups = obsdata[groupby].unique()
+        elif isinstance(show_groups,list) and len([1 for v in show_groups if v not in obsdata[groupby].unique()]):
+            raise ValueError("'show_groups' contains values absent in 'groupby'.")
+            
+        col_list = sns.color_palette(palette, len(show_groups))
+        v_list = [obsdata[x_hist][obsdata[groupby]==g] for g in show_groups]        
+        for i,g in enumerate(show_groups):
+            plt.hist(v_list[i],bins,label=g,alpha=0.6, color=col_list[i])
+
+        plt.legend(loc='upper right')
+        
+    # Hide the right and top spines
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    plt.xlabel('Total cell UMI count',fontsize=12)
+    plt.ylabel('Frequency',fontsize=12)
+    if fix_yticks is not None:
+        plt.yticks(fix_yticks,fix_yticks)
+    plt.xticks(xticks[xidx], xannos[xidx])
+    if return_fig is True:
+        return fig
+
+
+
+def corrected_UMI_hist(adata,groupby,groups,reference,logUMIby,ratios,return_fig=None):
+    '''
+    Compare raw log-UMI-amount distributions versus ratio-based corrected log-UMI-amount distributions.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
+        Rows correspond to droplets and columns to genes.
+    groupby : str
+        The key of the droplet categories stored in adata.obs. 
+    groups : list, optional
+        Droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby] to display. 
+        The default is None.
+        We recommand putting the reference group in the first element.
+    reference : str
+        One droplet category annotated in adata.obs[groupby].
+        Use the specified group as reference. Generally, this group has the smallest mRNA content. 
+    logUMIby : str
+        The key of logUMI values stroed in adata.obs. The default is 'log10UMIs'.
+    ratios : list
+        List of estimated total-mRNA ratios. Each element corresponds to a group specified in 'groups'. 
+        We recommand setting the value of reference group to be 1.
+    return_fig : bool, optional
+        Return the matplotlib figure. The default is None.
+
+    Returns
+    -------
+    g : matplotlib figure
+
+
+    '''
+    ba_info = get_corrected_logUMI(adata,groupby,groups,reference,logUMIby,ratios)
+    sns.cubehelix_palette(2*len(groups), rot=-.4, light=.7)
+    sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
+
+    pal_list = sns.cubehelix_palette(2*len(groups), start=1.4, rot=-.25, light=.7, dark=.4) + \
+    sns.cubehelix_palette(2*len(groups), rot=-.4, light=.7)
+    pal = [pal_list[i] for i in [2*ii for ii in range(2*len(groups))]] 
+
+    g = sns.FacetGrid(ba_info, row=groupby, hue=groupby, aspect=7, height=.8, palette=pal)
+    g.map(sns.kdeplot, logUMIby, bw_adjust=.7, 
+          cut=4, clip_on=True, fill=True, alpha=0.8, linewidth=1.5)
+    g.map(sns.kdeplot, logUMIby, bw_adjust=.7, 
+          cut=4, clip_on=True, color="w", lw=2)
+    g.map(plt.axhline, y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+    g.map(label, groupby)
+    g.fig.subplots_adjust(hspace=-0.5)
+    #g.set(yticks=[], xlabel="", ylabel="",xlim=(None, 4), xticks=[3,3.5,4],title="")
+    g.set(yticks=[], xlabel="", ylabel="",title="")#,xticks=xticks[xidx], xannos=xannos[xidx],title="")
+    #g.set_xticklabels(xticks[xidx],xannos[xidx])
+    #g.set_xticklabels(xannos[xidx])
+
+    g.despine(bottom=True, left=True)
+    #plt.savefig('./outcome/fig/UMIhist.pdf')
+    plt.show()
+    if return_fig is True:
+        return g
+
+
+
+def get_corrected_logUMI(adata, groupby, groups, reference,logUMIby, ratios):
+    
+    didx = [d for d in adata.obs_names if adata.obs.loc[d,groupby] in groups]
+    #ori_data = pd.DataFrame(adata[adata.obs['danno']!='Hetero-dbl',:].obs)
+    ori_data = pd.DataFrame(adata[didx,:].obs)
+    ori_data[groupby] = ori_data[groupby].astype(str)
+    corr_data = copy.deepcopy(ori_data)
+    for i,v in enumerate(groups):
+        logratio_obs = adata.uns['logUMI_para'].loc[v,'mean']-adata.uns['logUMI_para'].loc[reference,'mean']
+        delta_logUMI = np.log10(ratios[i])-logratio_obs
+        corr_data.loc[ori_data[groupby]==v,logUMIby] = ori_data.loc[ori_data[groupby]==v,logUMIby]+delta_logUMI#np.log10(ratio[i])
+        corr_data.loc[ori_data[groupby]==v,groupby] = v+'_corrected' 
+        
+    corr_data[groupby] = pd.Categorical(corr_data[groupby],groups+[v+'_corrected' for v in groups])
+    ori_data[groupby] = pd.Categorical(ori_data[groupby],groups)
+    ba_info = pd.concat([ori_data,corr_data])
+
+    return ba_info
+
+
+
+def label(x, color, label):
+    ax = plt.gca()
+    ax.text(0, .1, label, fontweight="bold", color=color,
+            ha="left", va="center", transform=ax.transAxes)
+
+
+
+import itertools
+import seaborn as sns
+from matplotlib import pyplot as plt
+import warnings
+
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    # fxn()
+    
+    
+    
+def volcano_2DE(de_df, markers_dn2up=None):
+    '''
+    Plot the volcano plot of 2 DE results stored in 'de_df'.
+
+    Parameters
+    ----------
+    de_df : pandas.DataFrame
+        Table fusing two input DE resutls.
+    markers_dn2up : list of str, optional
+        Marker genes to highlight. The default is None.
+
+    Returns
+    -------
+    None.
+
+    '''
+    fc_x = de_df['log2FC_gs']
+    fc_y = de_df['log2FC_rc']
+    genes_dn2up = de_df.index[de_df['levelchange']=='dn2up']
+    genes_ns2up = de_df.index[de_df['levelchange']=='ns2up']
+    genes_dn2ns =  de_df.index[de_df['levelchange']=='dn2ns']
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        
+        pval_x = - np.log10(de_df['pval_adj_gs'])
+        pval_y = - np.log10(de_df['pval_adj_rc'])
+
+    pval_x[pval_x==np.inf] = -np.log10(1e-323)
+    pval_y[pval_y==np.inf] = -np.log10(1e-323)
+
+
+    xfig, axs =plt.subplots(1,2,figsize=(8,5),dpi=64)
+
+    plt.subplot(1,2, 1)
+    plt.scatter(fc_x,pval_x,s=0.5,color='silver')
+    if markers_dn2up is not None:
+        plt.scatter(fc_x[markers_dn2up],pval_x[markers_dn2up],color='red',s=20)
+        plt.scatter(fc_x[markers_ns2up],pval_x[markers_ns2up],color='blue',s=20)
+        plt.scatter(fc_x[markers_hk],pval_x[markers_hk],color='black',s=20)
+
+    plt.plot([0,0],[0,323],c='black',linestyle='dashed')
+    plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')
+    plt.xticks([-5,0,5],[-5,0,5],fontsize=15) 
+    plt.yticks([0,100,200,300],[0,100,200,300],fontsize=15) 
+    plt.title('Global scaling DE',fontsize=18)
+    plt.ylabel(r'$-log_10(p.val)$',fontsize = 18)
+    plt.xlabel(r'$log_2FC$',fontsize = 18)
+
+    plt.subplot(1,2, 2)
+    plt.scatter(fc_y,pval_y,s=0.5,color='silver')
+    if markers_dn2up is not None:
+        plt.scatter(fc_y[markers_dn2up],pval_y[markers_dn2up],color='red',s=20)
+        plt.scatter(fc_y[markers_ns2up],pval_y[markers_ns2up],color='blue',s=20)
+        plt.scatter(fc_y[markers_hk],pval_y[markers_hk],color='black',s=20)
+
+    plt.plot([0,0],[0,323],c='black',linestyle='dashed')
+    plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')
+    plt.xticks([-5,0,5],[-5,0,5],fontsize=15) 
+    plt.yticks([0,100,200,300],[0,100,200,300],fontsize=15) 
+    plt.title('RC scaling DE',fontsize=18)
+    #plt.xlabel(r'$-log_10(p.val)$',fontsize = 18)
+    plt.xlabel(r'$log_2FC$',fontsize = 18)
+    plt.tight_layout()
+    #plt.savefig('./DE/R4.3/compareDE/GSvsLRT_volcano_pcrMarkers_B2M.pdf', bbox_inches='tight')
+    plt.show()
+
+
+
+def get_plot_df(adata, genes):
+
+    #exp_vec = np.ravel(scipy.sparse.csr_matrix.todense(adata.raw[:,genes].X), order = 'F')
+    exp_vec = np.ravel(adata[:,genes].X.toarray(), order = 'F')
+    data_df = pd.DataFrame({'barcodes':adata.obs_names.tolist()*len(genes),
+                            'expression': exp_vec,
+                            'genes': list(itertools.chain.from_iterable([[g]*adata.n_obs for g in genes])),
+                            'celltype': adata.obs['danno'].tolist()*len(genes)})
+    
+    return data_df
+
+
+
+def violin_2DE(adata_10k, adata_rc, genes, return_fig=None):
+    '''
+    Violin plot of gene expressions in global-scaling values and ratio-corrected values.
+
+    Parameters
+    ----------
+    adata_10k : AnnData
+        The expression matrix after global-scaling normalization.
+        Rows correspond to droplets and columns to genes.
+    adata_rc : AnnData
+        The expression matrix after total-mRNA-ratio-based correction.
+        Rows correspond to droplets and columns to genes.
+    genes : list of str
+        Genes to plot.
+    return_fig : bool, optional
+        Return the matplotlib figure. The default is None.
+
+    Returns
+    -------
+    g : matplotlib figure
+
+    '''
+    data_df1 = get_plot_df(adata_10k, genes)
+    data_df2 = get_plot_df(adata_rc, genes)
+    data_df2['expression'] = np.log1p(data_df2['expression'])
+    
+    data_df = pd.concat([data_df1, data_df2])
+    data_df['normalization'] = ['convention']*data_df1.shape[0] + ['ratio-corrected']*data_df2.shape[0]
+    
+    g = sns.catplot(x="genes", y="expression", hue="celltype",
+                    col="normalization",
+                    data=data_df, kind="violin",split=True,inner = 'quartile',
+                    height=4, aspect=0.12*(1+len(genes)),cut=0,bw=0.3)
+
+    if return_fig is True:
+        return g
+ 
+
+
+
 
 
 

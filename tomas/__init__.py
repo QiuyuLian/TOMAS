@@ -1,3 +1,3 @@
-from . import fit, vis, emg, est
+from . import fit, vis, auxi, infer, lrt
 
 
