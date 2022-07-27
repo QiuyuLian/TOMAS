@@ -75,6 +75,8 @@ html_context = dict(
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_show_sphinx = False
+html_static_path = ['_static']
+html_logo = '_static/img/logo_v2.png'
 
 
 # Generate the API documentation when building
