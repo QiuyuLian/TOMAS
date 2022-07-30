@@ -17,7 +17,7 @@ import os
 
 
 
-def dmn_convergence(group,output):
+def dmn_convergence(group,output,return_fig=None):
     '''
     Visualize the convergence of DMN optimation process.
 
@@ -56,6 +56,8 @@ def dmn_convergence(group,output):
     plt.title('delta of l2norm of alpha',fontsize=14)
 
     fig.tight_layout()
+    if return_fig is True:
+        return fig
     plt.show()
 
 
@@ -347,7 +349,7 @@ with warnings.catch_warnings():
     
     
     
-def volcano_2DE(de_df, markers_dn2up=None):
+def volcano_2DE(de_df, markers_dn2up=None,return_fig=None):
     '''
     Plot the volcano plot of 2 DE results stored in 'de_df'.
 
@@ -379,7 +381,7 @@ def volcano_2DE(de_df, markers_dn2up=None):
     pval_y[pval_y==np.inf] = -np.log10(1e-323)
 
 
-    xfig, axs =plt.subplots(1,2,figsize=(8,5),dpi=64)
+    fig, axs =plt.subplots(1,2,figsize=(8,5),dpi=64)
 
     plt.subplot(1,2, 1)
     plt.scatter(fc_x,pval_x,s=0.5,color='silver')
@@ -411,7 +413,8 @@ def volcano_2DE(de_df, markers_dn2up=None):
     #plt.xlabel(r'$-log_10(p.val)$',fontsize = 18)
     plt.xlabel(r'$log_2FC$',fontsize = 18)
     plt.tight_layout()
-    #plt.savefig('./DE/R4.3/compareDE/GSvsLRT_volcano_pcrMarkers_B2M.pdf', bbox_inches='tight')
+    if return_fig is True:
+        return fig
     plt.show()
 
 
