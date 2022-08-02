@@ -122,7 +122,7 @@ def logRatio_dist(r_list,nbins=20,return_fig=None):
     xy_ticks = np.arange(xy_lim[0]+2, xy_lim[1], step=2)
 
     x = np.log2(r_list)
-    x_shrinkage = rm_outliers(x)
+    x_shrinkage = auxi.rm_outliers(x)
 
     #plt.figure(figsize=(6,8),dpi=256)
     fig, (ax_box,ax_hist) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.1, .9)})
@@ -147,16 +147,6 @@ def logRatio_dist(r_list,nbins=20,return_fig=None):
     if return_fig is True:
         return fig
     plt.show()
-
-
-
-def rm_outliers(x):
-    iqr = stats.iqr(x)
-    outlier_lb = np.quantile(x,0.25)-1.5*iqr
-    outlier_ub = np.quantile(x,0.75)+1.5*iqr
-    x_shrinkage = x[x > outlier_lb]
-    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
-    return x_shrinkage#,(outlier_lb,outlier_ub)
 
 
 
@@ -349,7 +339,7 @@ with warnings.catch_warnings():
     
     
     
-def volcano_2DE(de_df, markers_dn2up=None,return_fig=None):
+def volcano_2DE(de_df, marker_list=None, marker_colos=None, return_fig=None):
     '''
     Plot the volcano plot of 2 DE results stored in 'de_df'.
 
@@ -385,11 +375,11 @@ def volcano_2DE(de_df, markers_dn2up=None,return_fig=None):
 
     plt.subplot(1,2, 1)
     plt.scatter(fc_x,pval_x,s=0.5,color='silver')
-    if markers_dn2up is not None:
-        plt.scatter(fc_x[markers_dn2up],pval_x[markers_dn2up],color='red',s=20)
-        plt.scatter(fc_x[markers_ns2up],pval_x[markers_ns2up],color='blue',s=20)
-        plt.scatter(fc_x[markers_hk],pval_x[markers_hk],color='black',s=20)
-
+    
+    if marker_list is not None:
+        for idx in range(len(marker_list)):
+            plt.scatter(fc_x[marker_list[idx]], pval_x[marker_list[idx]],color=marker_colos[idx],s=20)
+            
     plt.plot([0,0],[0,323],c='black',linestyle='dashed')
     plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')
     plt.xticks([-5,0,5],[-5,0,5],fontsize=15) 
@@ -400,11 +390,12 @@ def volcano_2DE(de_df, markers_dn2up=None,return_fig=None):
 
     plt.subplot(1,2, 2)
     plt.scatter(fc_y,pval_y,s=0.5,color='silver')
-    if markers_dn2up is not None:
-        plt.scatter(fc_y[markers_dn2up],pval_y[markers_dn2up],color='red',s=20)
-        plt.scatter(fc_y[markers_ns2up],pval_y[markers_ns2up],color='blue',s=20)
-        plt.scatter(fc_y[markers_hk],pval_y[markers_hk],color='black',s=20)
 
+    if marker_list is not None:
+        for idx in range(len(marker_list)):
+            plt.scatter(fc_y[marker_list[idx]], pval_y[marker_list[idx]],color=marker_colos[idx],s=20)
+            
+            
     plt.plot([0,0],[0,323],c='black',linestyle='dashed')
     plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')
     plt.xticks([-5,0,5],[-5,0,5],fontsize=15) 
@@ -432,16 +423,16 @@ def get_plot_df(adata, genes):
 
 
 
-def violin_2DE(adata_10k, adata_rc, genes, return_fig=None):
+def violin_2DE(adata_1, adata_2, genes, data_name=['Before correction','After correction'], return_fig=None):
     '''
     Violin plot of gene expressions in global-scaling values and ratio-corrected values.
 
     Parameters
     ----------
-    adata_10k : AnnData
+    adata_1 : AnnData
         The expression matrix after global-scaling normalization.
         Rows correspond to droplets and columns to genes.
-    adata_rc : AnnData
+    adata_2 : AnnData
         The expression matrix after total-mRNA-ratio-based correction.
         Rows correspond to droplets and columns to genes.
     genes : list of str
@@ -454,23 +445,136 @@ def violin_2DE(adata_10k, adata_rc, genes, return_fig=None):
     g : matplotlib figure
 
     '''
-    data_df1 = get_plot_df(adata_10k, genes)
-    data_df2 = get_plot_df(adata_rc, genes)
+    data_df1 = get_plot_df(adata_1, genes)
+    data_df2 = get_plot_df(adata_2, genes)
     data_df2['expression'] = np.log1p(data_df2['expression'])
     
     data_df = pd.concat([data_df1, data_df2])
-    data_df['normalization'] = ['convention']*data_df1.shape[0] + ['ratio-corrected']*data_df2.shape[0]
+    data_df['DE'] = [data_name[0]]*data_df1.shape[0] + [data_name[1]]*data_df2.shape[0]
     
     g = sns.catplot(x="genes", y="expression", hue="celltype",
-                    col="normalization",
+                    col="DE",
                     data=data_df, kind="violin",split=True,inner = 'quartile',
-                    height=4, aspect=0.12*(1+len(genes)),cut=0,bw=0.3)
+                    height=4, aspect=0.15*(1+len(genes)),cut=0,bw=0.3)
 
     if return_fig is True:
         return g
  
+    
+ 
+def violin(adata,genes,return_fig=True):
+    '''
+    Violin of gene expression.
+
+    Parameters
+    ----------
+    adata : TYPE
+        DESCRIPTION.
+    genes : TYPE
+        DESCRIPTION.
+    return_fig : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    g : TYPE
+        DESCRIPTION.
+
+    '''
+    data_df = get_plot_df(adata_rc, genes)
+
+    g = sns.catplot(x="genes", y="expression", hue="celltype",
+                    data=data_df, kind="violin",split=True,inner = 'quartile',
+                    height=4, aspect=0.18*(1+len(genes)),cut=0,bw=0.3)
+    
+    if return_fig is True:
+        return g
+ 
+     
+        
+    
 
 
+def DEshift(df,return_fig=None):
+
+    x1 = [[df.loc['up',:].sum(), df.loc['up','up']], 
+          # ns -> up
+          [df.loc['up',:].sum()+df.loc['ns',:].sum(), df.loc['up','up']+df.loc['ns','up']], 
+          # dn -> up
+          [df.loc['up','up'],df['up'].sum()], 
+          # up -> ns
+          [df.loc['up',:].sum()+df.loc['ns',:].sum()+df.loc['dn','up'],df['up'].sum()+df['ns'].sum()-df.loc['dn','ns']], 
+          # dn -> ns
+          [df.loc['up','up']+df.loc['up','ns'], df['up'].sum()+df['ns'].sum()], 
+          # up -> dn
+          [df.loc['up',:].sum()+df.loc['ns','up']+df.loc['ns','ns'], df['up'].sum()+df['ns'].sum()+df.loc['up','dn']] 
+          # ns -> dn
+         ]
+    x2 = [[df.loc['up',:].sum()+df.loc['ns','up'], df.loc['up','up']+df.loc['ns','up']],# ns -> up
+          [df.loc['up',:].sum()+df.loc['ns',:].sum()+df.loc['dn','up'], df['up'].sum()],# dn -> up
+          [df.loc['up','up']+df.loc['up','ns'],df['up'].sum()+df.loc['up','ns']],# up -> ns
+          [df.sum().sum()-df.loc['dn','dn'],df['up'].sum()+df['ns'].sum()],# dn -> ns
+          [df.loc['up',:].sum(),df['up'].sum()+df['ns'].sum()+df.loc['up','dn']],# up -> dn
+          [df.loc['up',:].sum()+df.loc['ns',:].sum(),df.sum().sum()-df.loc['dn','dn']]# ns -> dn
+         ]
+
+    shading_col = ['blue','red','green','#fac748','#f88dad','#1f7a8c'] # color of DE change
+    deltaDE_list = ['ns2up','dn2up','up2ns','dn2ns','up2dn','ns2dn']
+
+    dataset = [df.sum(1).to_dict(), df.sum(0).to_dict()]
+    data_orders = [['up','ns','dn'],['up','ns','dn']]
+
+    #colors = ["#161a1d","grey","#a4161a"] # color of DE, dn ns up
+    colors = ["blue","grey","red"] # color of DE, dn ns up
+
+    names = sorted(dataset[0].keys())
+    values = np.array([[data[name] for name in order] for data,order in zip(dataset, data_orders)])
+    lefts = np.insert(np.cumsum(values, axis=1),0,0, axis=1)[:, :-1]
+    orders = np.array(data_orders)
+    bottoms = np.arange(len(data_orders))
+
+    fig,ax = plt.subplots(figsize=(15,3))
+    for name, color in zip(names, colors):
+        idx = np.where(orders == name)
+        value = values[idx]
+        left = lefts[idx]
+        plt.bar(x=left, 
+                height=0.3, 
+                width=value, 
+                bottom=bottoms, 
+                color=color, 
+                alpha=0.6,
+                orientation="horizontal")#, 
+                #label=name)
+
+    for i in range(6):
+        if sum(np.array(x2[i]-np.array(x1[i]))) > 0:
+            ax.fill_betweenx(y =[0.18,0.82], x1 = x1[i], x2 = x2[i], color = shading_col[i], label=deltaDE_list[i])
+    
+    up,ns,dn = df.sum(0)
+    plt.text(up/2-300,0.92,up,fontsize=25)
+    plt.text((up+up+ns)/2-300,0.92,ns,fontsize=25)
+    plt.text((2*up+2*ns+dn)/2-300,0.92,dn,fontsize=25)
+
+    up,ns,dn = df.sum(1)
+    plt.text(up/2-300,-0.08,up,fontsize=25)
+    plt.text((up+up+ns)/2-300,-0.08,ns,fontsize=25)
+    plt.text((2*up+2*ns+dn)/2-300,-0.08,dn,fontsize=25)
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    #plt.yticks(bottoms+0.4, ["data %d" % (t+1) for t in bottoms])
+    plt.yticks([])
+    #plt.xticks([])
+    plt.legend(loc="best", bbox_to_anchor=(1.0, 1))
+    plt.subplots_adjust(right=0.85)
+
+    plt.tight_layout()
+    if return_fig is True:
+        return fig
+    plt.show()
 
 
 

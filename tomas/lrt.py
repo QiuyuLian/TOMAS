@@ -1,4 +1,4 @@
-import copy#, scipy
+#import copy#, scipy
 from tqdm import tqdm
 from scipy.stats import norm
 #from scipy import sparse
@@ -17,10 +17,11 @@ import pandas as pd
 import time
 
 
-def total_mRNA_aware_DE(adata_sgl_rc, groupby, reference, groups=None,minCells=5,n_cores=None,pval_cutoff=0.05, logFC_cutoff=0):
+
+
+def total_mRNA_aware_DE(adata_sgl, groupby, reference, groups=None, minCells=5,n_cores=None,pval_cutoff=0.05, logFC_cutoff=0):
     '''
     Total-mRNA-aware differential expression analysis.
-
     Parameters
     ----------
     adata_sgl_rc : AnnData
@@ -42,25 +43,23 @@ def total_mRNA_aware_DE(adata_sgl_rc, groupby, reference, groups=None,minCells=5
         Significance level. The default is 0.05.
     logFC_cutoff : float, optional
         Cutoff of log2-foldchange to tell the DE significance. The default is 0.
-
     Returns
     -------
     lrt_DE_dic : dict
         Return total-mRNA-aware DE results in a dictionary. The keys are homo-typic droplet categories compared to the reference.
-
     '''
     if n_cores is None:
         n_cores = min(30, int(mp.cpu_count()*0.8))
 
     if groups is None:
-        groups = list(adata_sgl_rc.obs[groupby].unique())
+        groups = list(adata_sgl.obs[groupby].unique())
     
     groups.remove(reference)
     groups = [reference]+groups 
     
     #print('Prepare LRT parameters, '+str(time.time()))
-    logN_para = adata_sgl_rc.uns['logUMI_para'].values
-    alpha_arr = adata_sgl_rc.varm['para_diri'].T
+    logN_para = adata_sgl.uns['logUMI_para'].values
+    alpha_arr = adata_sgl.varm['para_diri'].values.T
     
     alpha_arr[alpha_arr<1e-300] = 1e-300
 
@@ -69,12 +68,12 @@ def total_mRNA_aware_DE(adata_sgl_rc, groupby, reference, groups=None,minCells=5
                np.array([alpha_arr[1], sum(alpha_arr[1])-alpha_arr[1]])]
     
     ## calculate logFC using scanpy without normalizing UMIs
-    adata_copy = copy.deepcopy(adata_sgl_rc)
+    adata_copy = adata_sgl.copy()
     sc.pp.log1p(adata_copy) 
     sc.tl.rank_genes_groups(adata_copy, groupby, method='wilcoxon', reference=reference)
     DE_logFCref = extract_DE(adata_copy, pval_cutoff=pval_cutoff, logFC_cutoff=logFC_cutoff)
 
-    subdata_list = [adata_sgl_rc[adata_sgl_rc.obs[groupby]==g,:].X.toarray() for g in groups]
+    subdata_list = [adata_sgl[adata_sgl.obs[groupby]==g,:].X.toarray() for g in groups]
     n_cells_each_type = np.column_stack([np.count_nonzero(subdata, axis=0) for subdata in subdata_list])
     n_genes, n_types = n_cells_each_type.shape
     
@@ -114,7 +113,7 @@ def total_mRNA_aware_DE(adata_sgl_rc, groupby, reference, groups=None,minCells=5
         _, sim_lrt_pval_adj,_,_ = multitest.multipletests(sim_lr_pval[:,1],method='fdr_bh')
     
         DE_logFCref.index = DE_logFCref[group+'_names']
-        DE_logFCref = DE_logFCref.loc[adata_sgl_rc.var_names[goverMcells],:]
+        DE_logFCref = DE_logFCref.loc[adata_sgl.var_names[goverMcells],:]
         logFC = DE_logFCref[group+'_logfoldchanges']
     
         lrt_df = pd.DataFrame({'log2FC':logFC, 
@@ -123,11 +122,13 @@ def total_mRNA_aware_DE(adata_sgl_rc, groupby, reference, groups=None,minCells=5
                                'lrt_pval_adj':sim_lrt_pval_adj,
                                'pct_'+reference: pct_each_type[goverMcells,0],
                                'pct_'+group: pct_each_type[goverMcells,idx],
-                              },index=adata_sgl_rc.var_names[goverMcells])
+                              },index=adata_sgl.var_names[goverMcells])
         
         lrt_DE_dic[group] = lrt_df
         
         return lrt_DE_dic
+
+    
 
 
 
@@ -329,4 +330,4 @@ def summarize2DE(gs_df, lrt_df, group, pval_cutoff = 0.05, logFC_cutoff = 0):
 
     de_df['levelchange'] = [de_df['level_gs'][i]+'2'+de_df['level_rc'][i] for i in range(de_df.shape[0])]
 
-    return de_df
+    return de_df,DE_level_delta

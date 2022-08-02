@@ -101,7 +101,7 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
         
     alpha_df = pd.DataFrame(np.array(alpha_out).T, index=adata.var_names, columns=groups)
     adata.varm['para_diri'] = alpha_df
-    alpha_df.to_csv(os.path.join(output,'alpha,csv'))
+    #alpha_df.to_csv(os.path.join(output,'alpha,csv'))
 
 
         
@@ -258,6 +258,16 @@ def calculate_LL(alpha, Y):
 #%% logNormal distribution optimization
 
 from scipy.stats import norm
+from scipy import stats
+
+def rm_outliers(x):
+    iqr = stats.iqr(x)
+    outlier_lb = np.quantile(x,0.25)-1.5*iqr
+    outlier_ub = np.quantile(x,0.75)+1.5*iqr
+    x_shrinkage = x[x > outlier_lb]
+    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
+    return x_shrinkage#,(outlier_lb,outlier_ub)
+
 
 def logN_para(adata,logUMIby,groupby,groups=None,inplace=True):
     '''

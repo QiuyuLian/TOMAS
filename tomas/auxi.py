@@ -8,8 +8,6 @@ Created on Wed Jul  6 02:41:49 2022
 
 
 
-#%% meta-genes
-
 
 import pickle
 import numpy as np
@@ -21,10 +19,12 @@ import scanpy as sc
 import tqdm
 import multiprocessing as mp
 import math
+from scipy import stats
 
 
 
 
+#%% meta-genes
 
 def cal_KL_bc(adata, groups, parallel=True):
     '''
@@ -477,7 +477,7 @@ def get_mg(raw_Alpha1, raw_Alpha2, merging_threshold=1, skip_threshold=2, alphaM
 
 import copy
 
-def correctUMI(adata, groupby, ratios, logUMIby=None):
+def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
     '''
     Correct UMI to meet the estimated total-mRNA-ratio.
 
@@ -558,5 +558,35 @@ def RCsampling(X_mat, alpha, UMI_delta):
     #X_mat_up_sparse = scipy.sparse.csr_matrix(X_mat_up)
     
     return X_mat_up#_sparse
+
+
+
+
+def rm_outliers(x):
+    iqr = stats.iqr(x)
+    outlier_lb = np.quantile(x,0.25)-1.5*iqr
+    outlier_ub = np.quantile(x,0.75)+1.5*iqr
+    x_shrinkage = x[x > outlier_lb]
+    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
+    return x_shrinkage#,(outlier_lb,outlier_ub)
+
+
+
+
+def correct_para(adata_sgl):
+    
+    m_d,std_d = norm.fit(rm_outliers(np.log10(adata_sgl.uns['Rest_perdbl'])))
+    
+    m_n_corrected = adata_sgl.uns['logUMI_para'].loc['Homo-activated','mean']-m_d
+    std_n_corrected = np.sqrt(std_d**2-adata_sgl.uns['logUMI_para'].loc['Homo-activated','std']**2)
+    
+    #print(m_n_corrected, std_n_corrected)
+    
+    adata_sgl.uns['logUMI_para'].loc['Homo-naive','mean'] = m_n_corrected
+    
+    
+
+
+
 
 
