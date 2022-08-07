@@ -111,7 +111,16 @@ def alpha_opt_process(record, saveFig = False, filename=None):
     plt.show()
 '''
 
-    
+
+def rm_outliers(x):
+    iqr = stats.iqr(x)
+    outlier_lb = np.quantile(x,0.25)-1.5*iqr
+    outlier_ub = np.quantile(x,0.75)+1.5*iqr
+    x_shrinkage = x[x > outlier_lb]
+    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
+    return x_shrinkage#,(outlier_lb,outlier_ub)
+
+
 
 def logRatio_dist(r_list,nbins=20,return_fig=None):
     
@@ -122,7 +131,7 @@ def logRatio_dist(r_list,nbins=20,return_fig=None):
     xy_ticks = np.arange(xy_lim[0]+2, xy_lim[1], step=2)
 
     x = np.log2(r_list)
-    x_shrinkage = auxi.rm_outliers(x)
+    x_shrinkage = rm_outliers(x)
 
     #plt.figure(figsize=(6,8),dpi=256)
     fig, (ax_box,ax_hist) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.1, .9)})
@@ -339,7 +348,7 @@ with warnings.catch_warnings():
     
     
     
-def volcano_2DE(de_df, marker_list=None, marker_colos=None, return_fig=None):
+def volcano_2DE(de_df, marker_list=None, marker_colors=None, return_fig=None):
     '''
     Plot the volcano plot of 2 DE results stored in 'de_df'.
 
@@ -370,15 +379,13 @@ def volcano_2DE(de_df, marker_list=None, marker_colos=None, return_fig=None):
     pval_x[pval_x==np.inf] = -np.log10(1e-323)
     pval_y[pval_y==np.inf] = -np.log10(1e-323)
 
-
     fig, axs =plt.subplots(1,2,figsize=(8,5),dpi=64)
-
     plt.subplot(1,2, 1)
     plt.scatter(fc_x,pval_x,s=0.5,color='silver')
     
     if marker_list is not None:
         for idx in range(len(marker_list)):
-            plt.scatter(fc_x[marker_list[idx]], pval_x[marker_list[idx]],color=marker_colos[idx],s=20)
+            plt.scatter(fc_x[marker_list[idx]], pval_x[marker_list[idx]],color=marker_colors[idx],s=20)
             
     plt.plot([0,0],[0,323],c='black',linestyle='dashed')
     plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')
@@ -395,7 +402,6 @@ def volcano_2DE(de_df, marker_list=None, marker_colos=None, return_fig=None):
         for idx in range(len(marker_list)):
             plt.scatter(fc_y[marker_list[idx]], pval_y[marker_list[idx]],color=marker_colos[idx],s=20)
             
-            
     plt.plot([0,0],[0,323],c='black',linestyle='dashed')
     plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')
     plt.xticks([-5,0,5],[-5,0,5],fontsize=15) 
@@ -407,6 +413,7 @@ def volcano_2DE(de_df, marker_list=None, marker_colos=None, return_fig=None):
     if return_fig is True:
         return fig
     plt.show()
+
 
 
 
@@ -423,7 +430,8 @@ def get_plot_df(adata, genes):
 
 
 
-def violin_2DE(adata_1, adata_2, genes, data_name=['Before correction','After correction'], return_fig=None):
+
+def violin_2DE(adata_1, adata_2, genes, corrected='para', data_name=['Before correction','After correction'], return_fig=None):
     '''
     Violin plot of gene expressions in global-scaling values and ratio-corrected values.
 
@@ -446,8 +454,16 @@ def violin_2DE(adata_1, adata_2, genes, data_name=['Before correction','After co
 
     '''
     data_df1 = get_plot_df(adata_1, genes)
+    if 'log1p' not in adata_1.uns:
+        data_df1['expression'] = np.log1p(data_df1['expression'])
+    
     data_df2 = get_plot_df(adata_2, genes)
-    data_df2['expression'] = np.log1p(data_df2['expression'])
+    if 'log1p' not in adata_2.uns:    
+        data_df2['expression'] = np.log1p(data_df2['expression'])
+    
+    if 'corrected' in adata_2.uns and adata_2.uns['corrected'] == 'para':
+        # shift data when displaying expression
+        data_df2['expression'] = data_df2['expression'] + np.log(adata_2.uns['shift_ratio'])
     
     data_df = pd.concat([data_df1, data_df2])
     data_df['DE'] = [data_name[0]]*data_df1.shape[0] + [data_name[1]]*data_df2.shape[0]
@@ -460,6 +476,7 @@ def violin_2DE(adata_1, adata_2, genes, data_name=['Before correction','After co
     if return_fig is True:
         return g
  
+    
     
  
 def violin(adata,genes,return_fig=True):
@@ -493,10 +510,8 @@ def violin(adata,genes,return_fig=True):
      
         
     
-
-
 def DEshift(df,return_fig=None):
-
+    
     x1 = [[df.loc['up',:].sum(), df.loc['up','up']], 
           # ns -> up
           [df.loc['up',:].sum()+df.loc['ns',:].sum(), df.loc['up','up']+df.loc['ns','up']], 

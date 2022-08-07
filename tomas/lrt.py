@@ -19,7 +19,7 @@ import time
 
 
 
-def total_mRNA_aware_DE(adata_sgl, groupby, reference, groups=None, minCells=5,n_cores=None,pval_cutoff=0.05, logFC_cutoff=0):
+def total_mRNA_aware_DE(adata_sgl, groupby, reference=None, groups=None, minCells=5,n_cores=None,pval_cutoff=0.05, logFC_cutoff=0):
     '''
     Total-mRNA-aware differential expression analysis.
     Parameters
@@ -54,6 +54,8 @@ def total_mRNA_aware_DE(adata_sgl, groupby, reference, groups=None, minCells=5,n
     if groups is None:
         groups = list(adata_sgl.obs[groupby].unique())
     
+    if reference is None:
+        reference = groups[np.argmin(adata_sgl.uns['logUMI_para'].loc[groups,'mean'])]
     groups.remove(reference)
     groups = [reference]+groups 
     
@@ -325,8 +327,9 @@ def summarize2DE(gs_df, lrt_df, group, pval_cutoff = 0.05, logFC_cutoff = 0):
     for i in range(len(vals)):
         ori,rc = vals[i].split('2')
         DE_level_delta.loc[ori,rc] = cnts[i]
-
-    print(DE_level_delta.astype(int))
+    
+    DE_level_delta = DE_level_delta.astype(int)
+    print(DE_level_delta)
 
     de_df['levelchange'] = [de_df['level_gs'][i]+'2'+de_df['level_rc'][i] for i in range(de_df.shape[0])]
 

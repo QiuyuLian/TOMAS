@@ -71,8 +71,9 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
             counts = counts.toarray()
             
         if subset is not None:
-            idx = np.random.choice(counts.shape[0], subset, replace=False)
-            counts = counts[idx,:]
+            if counts.shape[0] > subset:
+                idx = np.random.choice(counts.shape[0], subset, replace=False)
+                counts = counts[idx,:]
         
         if c_version:
             t0 = time.time()
@@ -134,7 +135,7 @@ def initialize_alpha(Y):
 
 def optimize_alpha(Y, alpha, **para):
     
-    minAlpha = 1e-200
+    minAlpha = 1e-100
     
     maxiter = para.get('maxiter',2000)
     likTol = para.get('likTol',1e-2)

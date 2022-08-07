@@ -102,7 +102,7 @@ def cal_KL_bc(adata, groups, parallel=True):
 
 
 
-def get_dbl_mg_bc(adata, groupby, groups, output, num_mg = 100, kl_cutoff=1, merging_threshold=5, skip_threshold=2,alphaMin = 1):
+def get_dbl_mg_bc(adata, groupby, groups, save_path=None, kl_filter=None, num_mg = 100, kl_cutoff=1, merging_threshold=5, skip_threshold=2,alphaMin = 1):
     '''
     Extract metagenes from raw UMI counts of heterotypic doublets.
 
@@ -115,7 +115,7 @@ def get_dbl_mg_bc(adata, groupby, groups, output, num_mg = 100, kl_cutoff=1, mer
         The key of the droplet categories stored in adata.obs. 
     groups : list of strings
         Specify two droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby], which form the hetero-dbl of interest.
-    output : path
+    save_path : path
         Path to save the results.
     num_mg : int, optional
         Number of exclusive meta-genes. The default is 100.
@@ -137,16 +137,20 @@ def get_dbl_mg_bc(adata, groupby, groups, output, num_mg = 100, kl_cutoff=1, mer
     '''
     raw_Alpha1_0 = adata.varm['para_diri'][groups[0]]
     raw_Alpha2_0 = adata.varm['para_diri'][groups[1]]
-
+    
+    raw_Alpha1_0[raw_Alpha1_0 < 1e-6] = 1e-6
+    raw_Alpha2_0[raw_Alpha2_0 < 1e-6] = 1e-6
+    
     #kl = obtain_KL_given2alphaVec(raw_Alpha_1, raw_Alpha_2, output)
     #adata.varm['kl'] = pd.DataFrame({groups[0]+'_'+groups[1]:kl},index=adata.var_names)
-    kl = adata.varm['kl']
     
-    #mg_dic = obtain_mg(raw_Alpha1_0, raw_Alpha2_0, kl, kl_cutoff=1)#, merging_threshold=1, skip_threshold=2)
-
-    # use genes with KL greater than cutoff to obtain meta-genes
-    KL_filter_idx = np.where(kl > kl_cutoff)[0]
-    
+    if kl_filter:
+        # use genes with KL greater than cutoff to obtain meta-genes
+        kl = adata.varm['kl']
+        KL_filter_idx = np.where(kl > kl_cutoff)[0]
+    else:
+        KL_filter_idx = np.array([i for i in range(len(raw_Alpha1_0))])
+        
     raw_Alpha1 = raw_Alpha1_0[KL_filter_idx]
     raw_Alpha2 = raw_Alpha2_0[KL_filter_idx]
 
@@ -184,7 +188,11 @@ def get_dbl_mg_bc(adata, groupby, groups, output, num_mg = 100, kl_cutoff=1, mer
     adata_dbl_mg.obs_names = adata.obs_names[adata.obs['danno']=='Hetero-dbl']
     adata_dbl_mg.varm['para_diri'] = mg_Alpha_arr.transpose()
     #adata_dbl_mg.uns['mg_gidx'] = mg_gidx#,index=adata_dbl_mg.var_names)
-    adata_dbl_mg.write_h5ad(os.path.join(output,groups[0]+'_'+groups[1]+'_dbl_mg.h5ad'))
+    if save_path is not None:
+        if os.path.exists(save_path):
+            adata_dbl_mg.write_h5ad(os.path.join(save_path,groups[0]+'_'+groups[1]+'_dbl_mg.h5ad'))
+        else:
+            raise ValueError("'save_path' is invalid. please input a valid path")
         
     # extract top num_mg 
     topmg_idx = [[i] for i in range(num_mg)] + [list(range(num_mg,  len(mg_gidx)))]
@@ -529,35 +537,45 @@ def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
         UMI_delta = 10**(mu_list[0] + np.log10(r_vals[i+1]) - mu_list[i+1])-1
         alpha = alpha_df[groups[i+1]]
         X_mat = copy.deepcopy(mat_rc[adata.obs[groupby]==groups[i+1],:])
-        X_mat_up = RCsampling(X_mat, alpha, UMI_delta)
+        
+        X_mat_up = _correct(X_mat, alpha, UMI_delta, method)
         mat_rc[adata.obs[groupby]==groups[i+1],:] = X_mat_up
     
     adata_rc = sc.AnnData(mat_rc)
     #adata_rc.obs = adata.obs
     adata_rc.var_names = adata.var_names.values.tolist()
     adata_rc.obs_names = adata.obs_names.values.tolist()
+    adata_rc.uns['corrected'] = 'data'
 
     return adata_rc
 
 
 
-def RCsampling(X_mat, alpha, UMI_delta):
+def _correct(X_mat, alpha, UMI_delta, method):
 
     if isinstance(X_mat, scipy.sparse.csr.csr_matrix):
         X_mat = X_mat.toarray()
-
-    x_list = []
-    for cidx in tqdm.tqdm(range(X_mat.shape[0])):
-        x = X_mat[cidx]
-        p = np.random.dirichlet(alpha+x,size=1)
-        x_delta = np.random.multinomial(int(sum(x)*UMI_delta), p[0])
-        x_modified = x + x_delta
-        x_list.append(x_modified)
-
-    X_mat_up = np.array(x_list)
-    #X_mat_up_sparse = scipy.sparse.csr_matrix(X_mat_up)
     
-    return X_mat_up#_sparse
+    if method == 'upscaling':
+        
+        X_mat_up = X_mat * (1+UMI_delta)
+        X_mat_up = X_mat_up.astype(int)
+        
+    elif method == 'upsampling':
+        x_list = []
+        for cidx in tqdm.tqdm(range(X_mat.shape[0])):
+            x = X_mat[cidx]
+            p = np.random.dirichlet(alpha+x,size=1)
+            x_delta = np.random.multinomial(int(sum(x)*UMI_delta), p[0])
+            x_modified = x + x_delta
+            x_list.append(x_modified)
+    
+        X_mat_up = np.array(x_list)
+        #X_mat_up_sparse = scipy.sparse.csr_matrix(X_mat_up)
+    else:
+        raise ValueError("'method' value error: only 'upsampling' or 'upscaling' is supported.")
+
+    return X_mat_up #_sparse
 
 
 
@@ -572,18 +590,32 @@ def rm_outliers(x):
 
 
 
+from scipy.stats import norm
+ 
+def correct_para(adata_sgl, groupby, achor_group=None, adjust_group=None):
+    
+    mean_logR, std_logR = norm.fit(rm_outliers(np.log10(adata_sgl.uns['Rest_perdbl'])))
+    
+    adata_sgl.uns['raw_logUMI_para'] = copy.deepcopy(adata_sgl.uns['logUMI_para'])
+    adata_sgl.uns['corrected'] = 'para'
+    
+    if achor_group is None or adjust_group is None:
+        groups = list(adata_sgl.obs[groupby].unique())
+        adjust_group,achor_group = (np.argsort(adata_sgl.uns['logUMI_para'].loc[groups,'mean'])).index
+        # adjust the parameter of group with smaller mean by default
+        
+    achor_mean = adata_sgl.uns['logUMI_para'].loc[achor_group,'mean']
+    adjust_mean = adata_sgl.uns['logUMI_para'].loc[adjust_group,'mean']
+    
+    adata_sgl.uns['shift_ratio'] = 10**(mean_logR - np.abs(achor_mean-adjust_mean))
+    
+    if achor_mean > adjust_mean:
+        mean_corrected = achor_mean - mean_logR
+    else:
+        mean_corrected = achor_mean + std_logR
+        
+    adata_sgl.uns['logUMI_para'].loc[adjust_group,'mean'] = mean_corrected
 
-def correct_para(adata_sgl):
-    
-    m_d,std_d = norm.fit(rm_outliers(np.log10(adata_sgl.uns['Rest_perdbl'])))
-    
-    m_n_corrected = adata_sgl.uns['logUMI_para'].loc['Homo-activated','mean']-m_d
-    std_n_corrected = np.sqrt(std_d**2-adata_sgl.uns['logUMI_para'].loc['Homo-activated','std']**2)
-    
-    #print(m_n_corrected, std_n_corrected)
-    
-    adata_sgl.uns['logUMI_para'].loc['Homo-naive','mean'] = m_n_corrected
-    
     
 
 

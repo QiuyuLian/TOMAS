@@ -20,18 +20,8 @@ Total-mRNA-aware differential analysis
    tutorial_DE
    
    
+Graphical user interface
+------------------------
 
-Total-mRNA-aware scRNA-seq simulator
-------------------------------------
-
-.. toctree::
-   :maxdepth:1
-   
-   demo_simulator
-   
-   
-Graphical interface
--------------------
-
-xxxxxxxx
+gui.rst
 
