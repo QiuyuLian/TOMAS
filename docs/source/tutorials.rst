@@ -23,5 +23,7 @@ Total-mRNA-aware differential analysis
 Graphical user interface
 ------------------------
 
-gui.rst
+.. toctree::
+
+   gui.rst
 

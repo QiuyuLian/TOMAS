@@ -6,7 +6,6 @@ Created on Wed Jul  6 02:29:17 2022
 @author: qy
 """
 
-from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns    
 from scipy import stats
@@ -14,6 +13,9 @@ import matplotlib
 import copy
 import pandas as pd
 import os
+import itertools
+from matplotlib import pyplot as plt
+import warnings
 
 
 
@@ -335,11 +337,6 @@ def label(x, color, label):
             ha="left", va="center", transform=ax.transAxes)
 
 
-
-import itertools
-import seaborn as sns
-from matplotlib import pyplot as plt
-import warnings
 
 
 with warnings.catch_warnings():

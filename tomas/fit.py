@@ -10,14 +10,16 @@ import numpy as np
 import scipy
 from scipy.special import gammaln
 import time
-import pickle
+#import pickle
 import traceback
 import pandas as pd
 import os, sys
 import pyDIMM
-
+from scipy import stats
+import multiprocessing as mp
 
 class HiddenPrints:
+    # Hide prints from pyDIMM in C
     def __enter__(self):
         self._original_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
@@ -61,11 +63,10 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
     
     if not os.path.exists(output):
         raise ValueError("Provide a valid path to save results!")
-
-    alpha_out = []
+    
+    counts_list = []
     for group in groups:
-        
-        print('Fit dmn with '+group+' droplets. This may take a long time. Please wait...')
+    
         counts = adata[adata.obs[groupby]==group,:].X
         if isinstance(counts,scipy.sparse.csr.csr_matrix):
             counts = counts.toarray()
@@ -74,38 +75,55 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
             if counts.shape[0] > subset:
                 idx = np.random.choice(counts.shape[0], subset, replace=False)
                 counts = counts[idx,:]
+                
+        counts_list.append(counts)
         
-        if c_version:
-            t0 = time.time()
-            with HiddenPrints():
-                dimm = pyDIMM.DIMM(observe_data=counts, n_components=1, print_log=True)
-                dimm.EM(max_iter=maxiter, max_alpha_tol=1e-3, max_loglik_tol=1e-3, save_log=True)
-            print('Time cost:', time.time()-t0, 'seconds.')
-
-            alpha_vec = np.ravel(dimm.get_model()['alpha'])
-            
-            log = pd.read_csv('pyDIMM.log')
-            log.to_csv(os.path.join(output,group+'.dmnlog.txt'))
-                        
-        else:
-            
-            log = open(os.path.join(output,group+'.dmnlog.txt'),'w',buffering=1)    
-            log.write('niter'+','+'alpha_sum'+','+'loglik'+','+'alpha_l2norm'+','+'alpha_l2norm_delta'+'\n')
-            
-            t0 = time.time()
-            alpha_init = initialize_alpha(counts)
-            alpha_vec = optimize_alpha(counts, alpha_init, log=log,maxiter=maxiter)
-            print('Time cost:', time.time()-t0, 'seconds.')
-            log.close()
-            
-        alpha_out.append(alpha_vec)
-        
+    n_cores = min(len(groups), int(mp.cpu_count()*0.8))
+    
+    pool = mp.Pool(n_cores)  
+    result_compact = [pool.apply_async( _job_fitdmn, (counts_list[i], groups[i], c_version, maxiter, output) ) for i in range(len(groups))]
+    pool.close()
+    pool.join()
+    
+    alpha_out = [term.get() for term in result_compact] 
+    
     alpha_df = pd.DataFrame(np.array(alpha_out).T, index=adata.var_names, columns=groups)
     adata.varm['para_diri'] = alpha_df
-    #alpha_df.to_csv(os.path.join(output,'alpha,csv'))
+    
 
 
-        
+
+
+def _job_fitdmn(counts, group,c_version,maxiter,output):
+
+    print('Start fitting '+group+' droplets. This may take a long time. Please wait...\n')
+    if c_version:
+        t0 = time.time()
+        with HiddenPrints():
+            dimm = pyDIMM.DIMM(observe_data=counts, n_components=1, print_log=True)
+            dimm.EM(max_iter=maxiter, max_alpha_tol=1e-3, max_loglik_tol=1e-3, save_log=True)
+        print('Finish fitting '+group+' droplets. Time cost:', time.time()-t0, 'seconds.')
+
+        log = pd.read_csv('pyDIMM.log')
+        log.to_csv(os.path.join(output,group+'.dmnlog.txt'))
+        #os.remove('pyDIMM.log')
+        alpha_vec = np.ravel(dimm.get_model()['alpha'])
+
+    else:
+
+        log = open(os.path.join(output,group+'.dmnlog.txt'),'w',buffering=1)    
+        log.write('niter'+','+'alpha_sum'+','+'loglik'+','+'alpha_l2norm'+','+'alpha_l2norm_delta'+'\n')
+
+        t0 = time.time()
+        alpha_init = initialize_alpha(counts)
+        alpha_vec = optimize_alpha(counts, alpha_init, log=log,maxiter=maxiter)
+        print('Finish fitting '+group+' droplets. Time cost:', time.time()-t0, 'seconds.\n')
+        log.close()
+    
+    return alpha_vec
+
+
+
 
 def initialize_alpha(Y):
 
@@ -258,9 +276,6 @@ def calculate_LL(alpha, Y):
 
 #%% logNormal distribution optimization
 
-from scipy.stats import norm
-from scipy import stats
-
 def rm_outliers(x):
     iqr = stats.iqr(x)
     outlier_lb = np.quantile(x,0.25)-1.5*iqr
@@ -298,7 +313,7 @@ def logN_para(adata,logUMIby,groupby,groups=None,inplace=True):
     
     para = []
     for g in groups:
-        m,s = norm.fit(adata.obs[logUMIby][adata.obs[groupby]==g])
+        m,s = stats.norm.fit(adata.obs[logUMIby][adata.obs[groupby]==g])
         para.append([m,s])
 
     if inplace:

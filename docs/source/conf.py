@@ -38,19 +38,12 @@ extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
-    #'sphinx_autodoc_annotation',
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
     'sphinx_autodoc_typehints',  # needs to be after napoleon
-    'sphinx.ext.viewcode',
+    #'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
     'nbsphinx',  # Select nbsphinx and, if needed, other Sphinx extensions:
-    #'sphinxcontrib.bibtex',  # for bibliographic references
-    #'sphinxcontrib.rsvgconverter',  # for SVG->PDF conversion in LaTeX output
-    #'sphinx_gallery.load_style',  # load CSS for gallery (needs SG >= 0.6)
-    #'sphinx_last_updated_by_git',  # get "last updated" from Git
-    #'sphinx_codeautolink',  # automatic links from code to documentation
-    #'sphinx.ext.intersphinx',  # links to other Sphinx projects (e.g. NumPy)
 ]
 
 
@@ -76,7 +69,7 @@ html_context = dict(
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_show_sphinx = False
 html_static_path = ['_static']
-html_logo = '_static/img/logo_v2.png'
+html_logo = '_static/img/logo_v3.png'
 
 
 # Generate the API documentation when building

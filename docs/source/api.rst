@@ -71,14 +71,4 @@ Auxiliary functions
    tomas.auxi.correctUMI
 
 
-Simulator
------------
-
-Total-mRNA-ratio-aware scRNA-seq data simulator.
-
-.. autosummary::
-   :toctree: generated/
-
-   tomas.lumache.lgammaVec
-
 

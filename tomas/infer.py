@@ -14,7 +14,7 @@ import pandas as pd
 #import scanpy as sc
 
 
-def ratio_2types(adata_dbl_mg,output,nrepeat=10):
+def ratio_2types(adata_dbl_mg,output,subset=100,nrepeat=10):
     '''
     
 
@@ -50,6 +50,11 @@ def ratio_2types(adata_dbl_mg,output,nrepeat=10):
     mg_Alpha_new = adata_dbl_mg.varm['para_diri'] .transpose()
     Y_new = adata_dbl_mg.X
     
+    if subset is not None:
+        if Y_new.shape[0] > subset:
+            idx = np.random.choice(Y_new.shape[0], subset, replace=False)
+            Y_new = Y_new[idx,:]
+
     estimateW(mg_Alpha_new,Y_new,logpath,nrepeat)
         
     ll_list = []
@@ -73,7 +78,7 @@ def ratio_2types(adata_dbl_mg,output,nrepeat=10):
 
 
 
-def estimateW(mg_Alpha_new,Y_new,output,nrepeat=10):
+def estimateW(mg_Alpha_new,Y_new,output,nrepeat=10,n_cores=None):
 
     ndoublets = len(Y_new)
 
@@ -107,9 +112,10 @@ def estimateW(mg_Alpha_new,Y_new,output,nrepeat=10):
         maxiter = 50
         delta_LL_tol = 0.1
         job_unit = 20
-        num_cores = 50
+        if n_cores is None:
+            n_cores = min(50, int(mp.cpu_count()*0.8))
+        
         parallel = True
-    
         if ndoublets <= job_unit:
             parallel = False
     
@@ -136,12 +142,11 @@ def estimateW(mg_Alpha_new,Y_new,output,nrepeat=10):
     
             # print('iteration',iteration)
             log.write('iteration '+str(iteration)+'\n')
-            # input log, alpha0, alpha1, num_cores, 
     
             tp0 = time.time()
             if parallel:
     
-                pool = mp.Pool(num_cores)  
+                pool = mp.Pool(n_cores)  
                 result_compact = [pool.apply_async( job_Estep, (Y_new, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, jobs_sidx[i], jobs_sidx[i+1]) ) for i in range(num_jobs)]
                 pool.close()
                 pool.join()
