@@ -28,6 +28,7 @@ Widely observed total mRNA differences
    :align: center
    :width: 650
 
+.. image:: _static/img/empty.png
 
 Misleading results when ignoring large total mRNA differences
 -------------------------------------------------------------
@@ -48,7 +49,7 @@ Misleading results when ignoring large total mRNA differences
    :width: 650
    :alt: Example demonstrating different total mRNA ratio assumptions lead to different interpretation
 
-
+.. image:: _static/img/empty.png
 
 Overview of TOMAS
 -----------------
@@ -75,9 +76,8 @@ By deconvoluting the captured mRNA molecules by cell type in heterotypic doublet
 Cite us
 -------
 
-The details can be fount in `our paper on bioRxiv <xxxx>`_. 
+The details can be found in `our paper on bioRxiv <xxxx>`_. 
 
-You can find the software on `github <https://github.com/QiuyuLian/TOMAS>`_.
 
 
 
