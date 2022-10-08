@@ -495,7 +495,7 @@ def violin(adata,genes,return_fig=True):
         DESCRIPTION.
 
     '''
-    data_df = get_plot_df(adata_rc, genes)
+    data_df = get_plot_df(adata, genes)
 
     g = sns.catplot(x="genes", y="expression", hue="celltype",
                     data=data_df, kind="violin",split=True,inner = 'quartile',

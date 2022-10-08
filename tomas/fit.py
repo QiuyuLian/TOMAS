@@ -17,6 +17,7 @@ import os, sys
 import pyDIMM
 from scipy import stats
 import multiprocessing as mp
+import anndata
 
 class HiddenPrints:
     # Hide prints from pyDIMM in C
@@ -68,9 +69,12 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
     for group in groups:
     
         counts = adata[adata.obs[groupby]==group,:].X
-        if isinstance(counts,scipy.sparse.csr.csr_matrix):
+        if isinstance(counts,scipy.sparse.csr.csr_matrix) or isinstance(counts, anndata._core.views.ArrayView):
             counts = counts.toarray()
-            
+        
+        if not np.issubdtype(counts.dtype, np.integer):
+            counts = counts.astype(int)
+        
         if subset is not None:
             if counts.shape[0] > subset:
                 idx = np.random.choice(counts.shape[0], subset, replace=False)

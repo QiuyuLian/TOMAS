@@ -1,9 +1,16 @@
-Template for the Read the Docs tutorial
-=======================================
+.. image:: docs/source/_static/img/logo_h3.png
+  :width: 600
+  :align: center
+  
+.. image:: docs/source/_static/img/empty.png
 
-This GitHub template includes fictional Python library
-with some basic Sphinx docs.
+
+TOMAS -- Total-mRNA-Aware Single Cell Analysis
+==============================================
+
+**TOMAS** is a Python package for **TO**\tal-**M**\RNA-**A**\ware **S**\ingle-cell RNA-seq data analysis.  
 
 Read the tutorial here:
 
-https://tomas.readthedocs.io/en/latest/
+* Read the `_documentation <https://tomas.readthedocs.io/en/latest/>`_.
+* Install via ``pip install tomas``.

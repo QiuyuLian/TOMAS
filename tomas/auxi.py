@@ -9,7 +9,7 @@ Created on Wed Jul  6 02:41:49 2022
 
 
 
-import pickle
+#import pickle
 import numpy as np
 import scipy
 from scipy.special import gammaln, digamma
@@ -185,7 +185,7 @@ def get_dbl_mg_bc(adata, groupby, groups, save_path=None, kl_filter=None, num_mg
     Y = np.transpose(np.array([np.sum(count_dbl[:,term],1) for term in mg_gidx]))
     
     adata_dbl_mg = sc.AnnData(Y)
-    adata_dbl_mg.obs_names = adata.obs_names[adata.obs['danno']=='Hetero-dbl']
+    adata_dbl_mg.obs_names = adata.obs_names[adata.obs[groupby]==groups[2]]
     adata_dbl_mg.varm['para_diri'] = mg_Alpha_arr.transpose()
     #adata_dbl_mg.uns['mg_gidx'] = mg_gidx#,index=adata_dbl_mg.var_names)
     if save_path is not None:
@@ -200,7 +200,7 @@ def get_dbl_mg_bc(adata, groupby, groups, save_path=None, kl_filter=None, num_mg
     Y_new = np.transpose(np.array([np.sum(Y[:,term],1) for term in topmg_idx]))
     
     adata_dbl_mg_top = sc.AnnData(Y_new)
-    adata_dbl_mg_top.obs_names = adata.obs_names[adata.obs['danno']=='Hetero-dbl']
+    adata_dbl_mg_top.obs_names = adata.obs_names[adata.obs[groupby]==groups[2]]
     adata_dbl_mg_top.varm['para_diri'] = mg_Alpha_new.transpose()
     #adata_dbl_mg_top.uns['mg_gidx'] = mg_gidx[:num_mg] + [[item  for idx,val in enumerate(mg_gidx) for item in val]]#,index=adata_dbl_mg_top.var_names)
     
