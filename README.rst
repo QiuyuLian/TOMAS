@@ -2,8 +2,6 @@
   :width: 600
   :align: center
   
-.. image:: docs/source/_static/img/empty.png
-
 
 TOMAS -- Total-mRNA-Aware Single Cell Analysis
 ==============================================
@@ -12,5 +10,5 @@ TOMAS -- Total-mRNA-Aware Single Cell Analysis
 
 Read the tutorial here:
 
-* Read the `_documentation <https://tomas.readthedocs.io/en/latest/>`_.
+* Read the `documentation <https://tomas.readthedocs.io/en/latest/>`_.
 * Install via ``pip install tomas``.
