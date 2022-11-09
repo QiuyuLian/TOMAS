@@ -620,5 +620,182 @@ def correct_para(adata_sgl, groupby, achor_group=None, adjust_group=None):
 
 
 
+#%% preparation in scRNA-only scenario 
+
+def extract_specific_genes(adata_psgl, groupby, pval=0.001, logfc=0):
+    '''
+    Extract specifically highly expressed genes of each cell type based on DE results.
+
+    Parameters
+    ----------
+    adata_psgl : AnnData
+        UMI matrix of putative singlets (homotypic droplets).
+    groupby : 'str'
+        The key of the cell type annotation results stored in adata.obs.
+    pval : float, optional
+        Cutoff of p value to extract significant DE genes. The default is 0.001.
+    logfc : float, optional
+        Cutoff of log2Fold-change to extract cell-type-specific DE genes. The default is 0.
+
+    Returns
+    -------
+    degene_sorted : list
+        Identified heterotypic doublets composed by the input cell type pair.
+
+    '''
+    result = adata_psgl.uns['rank_genes_groups']
+    groups = result['names'].dtype.names
+    de_df = pd.DataFrame({group + '_' + key[:1]: result[key][group]
+                          for group in groups for key in ['names', 'pvals','logfoldchanges']})
+
+    topn = np.min([len([i for i in de_df.index if de_df.loc[i,ct+'_p']<pval and de_df.loc[i,ct+'_l']>logfc]) for ct in groups])
+    
+    gtmp_list = []
+    for n,v in enumerate(groups):
+        
+        ridx = [gidx for gidx,gname in enumerate(de_df[v+'_n']) if de_df.iloc[gidx,3*n+1]<pval and de_df.iloc[gidx,3*n+2]>0]
+        gtmp = de_df.iloc[ridx,n*3:(n+1)*3]
+        
+        gtmp = gtmp.sort_values(by=[v+'_l'],ascending=False)
+        gtmp = gtmp.reset_index(drop=True)
+        gtmp_list.append(gtmp.iloc[:topn,:])
+
+    degene_sorted = pd.concat(gtmp_list, 1)
+    
+    return degene_sorted
+
+
+
+from matplotlib import pyplot as plt
+import seaborn as sns
+
+def inferHeteroDbl(adata, ct_pair, d_groupby, ct_groupby, g2meta = None, de_sorted=None, mg_gnum=[10,10], threshold = None, vis=True, log=True, return_fig=False):
+    '''
+    Identification and refinement of heterotypic doublets given specified cell type pair.
+
+    Parameters
+    ----------
+    adata : AnnData
+        UMI matrix of all droplet population.
+    ct_pair : list
+        Two cell types to investigate their heterotypic doublets.
+    d_groupby : str
+        The key of the droplet annotation ('Homotypic' or 'Heterotypic') results stored in adata.obs..
+    ct_groupby : str
+        The key of the cell type annotation results stored in adata.obs..
+    g2meta : list, optional
+        A list of genes. The default is None.
+    de_sorted : data frame, optional
+        Output of function 'extract_specific_genes'. The default is None.
+    mg_gnum : list, optional
+        Number of DEG merged to identify heterodbls. The default is [10,10].
+    threshold : TYPE, optional
+        Cutoff of expression levels to identify heterodbls. The default is None.
+    vis : bool, optional
+        Whether to visualize the heterodlb identification results. The default is True.
+    log : bool, optional
+        Whether to calculate in logarithmic form. The default is True (recommended).
+    return_fig : bool, optional
+        Whether to return the figure object. The default is False.
+
+    Raises
+    ------
+    ValueError
+        Inspect if genes to be merged for heterotypic doublet detection are specified in a proper way.
+
+    Returns
+    -------
+    list
+        Idnetified heterotypic doublets composed by input cell type pair.
+
+    '''
+    if g2meta is not None:
+        g2meta_x,g2meta_y = g2meta
+    elif de_sorted is not None:
+        g2meta_x = de_sorted[ct_pair[0]+'_n'][:mg_gnum[0]]
+        g2meta_y = de_sorted[ct_pair[1]+'_n'][:mg_gnum[0]]
+    else:
+        raise ValueError("value missing. please assign genes to merge by para 'g2meta' or 'de_sorted'")
+    
+    adata_sgl = adata[adata.obs[d_groupby]=='Homotypic'].copy()
+    adata_dbl = adata[adata.obs[d_groupby]=='Heterotypic'].copy()
+    
+    x_dbl = adata_dbl[:,g2meta_x].X.toarray().sum(1)
+    x_sgl = adata_sgl[:,g2meta_x].X.toarray().sum(1)
+
+    y_dbl = adata_dbl[:,g2meta_y].X.toarray().sum(1)
+    y_sgl = adata_sgl[:,g2meta_y].X.toarray().sum(1)
+
+    if log:
+        x_dbl = np.log(x_dbl+1)
+        x_sgl = np.log(x_sgl+1)
+        y_sgl = np.log(y_sgl+1)
+        y_dbl = np.log(y_dbl+1)
+
+    dbl_sub = pd.DataFrame({'x':x_dbl,'y':y_dbl},index=adata_dbl.obs_names)
+
+    sgl_sub = pd.DataFrame({'x':x_sgl,'y':y_sgl,
+                            'celltype_pair':['others']*len(x_sgl)
+                           },
+                           index=adata_sgl.obs_names)
+    sgl_sub.loc[adata_sgl.obs[ct_groupby]==ct_pair[0],'celltype_pair'] = ct_pair[0]
+    sgl_sub.loc[adata_sgl.obs[ct_groupby]==ct_pair[1],'celltype_pair'] = ct_pair[1]
+    sgl_sub['celltype_pair'] = pd.Categorical(sgl_sub['celltype_pair'].values.tolist(),categories=ct_pair+['others'])
+    sgl_sub[ct_groupby] = adata_sgl.obs[ct_groupby]
+
+    if threshold is None:
+        ct_x_mgy = sgl_sub.loc[sgl_sub['celltype_pair']==ct_pair[0], 'y']
+        ct_x_mgx = sgl_sub.loc[sgl_sub['celltype_pair']==ct_pair[0], 'x']
+
+        ct_y_mgx = sgl_sub.loc[sgl_sub['celltype_pair']==ct_pair[1], 'x']
+        ct_y_mgy = sgl_sub.loc[sgl_sub['celltype_pair']==ct_pair[1], 'y']
+
+        mgy_threshold = 1.1*np.max(ct_x_mgy[ct_x_mgx > np.max(ct_y_mgx)])
+        mgx_threshold = 1.1*np.max(ct_y_mgx[ct_y_mgy > np.max(ct_x_mgy)])
+    else:
+        mgx_threshold, mgy_threshold = threshold
+
+    dbl_onhit = [d for d in dbl_sub.index if dbl_sub.loc[d,'x'] > mgx_threshold and dbl_sub.loc[d,'y'] > mgy_threshold]
+
+    if vis:
+        
+        dbl_sub['pred'] = ['others']*dbl_sub.shape[0]
+        dbl_sub.loc[dbl_onhit,'pred'] = '-'.join(ct_pair)
+        dbl_sub['pred'] = pd.Categorical(dbl_sub['pred'],categories=['-'.join(ct_pair), 'others'])
+
+
+        fig = plt.figure(figsize=(11,4),dpi=64)
+        sns.set_style('white')
+        ax = plt.subplot(1,2,1)
+        sns.scatterplot(data=sgl_sub, x='x',y='y',hue='celltype_pair',palette=['blue','green','gray'])
+        plt.plot([0,max(sgl_sub['x'])],[mgy_threshold, mgy_threshold],color='blue')
+        plt.plot([mgx_threshold, mgx_threshold],[0,max(sgl_sub['y'])],color='green')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.,fontsize=15)
+        plt.xlabel('MetaDEG of '+ct_pair[0],fontsize=15)
+        plt.ylabel('MetaDEG of '+ct_pair[1],fontsize=15)
+        plt.title('Identified cell types \nfrom putative singlets',fontsize=18)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        
+        ax = plt.subplot(1,2,2)
+        sns.scatterplot(data=dbl_sub, x='x',y='y',hue='pred',palette=['red','gray'])
+        plt.plot([0,max(dbl_sub['x'])],[mgy_threshold, mgy_threshold],color='blue')
+        plt.plot([mgx_threshold, mgx_threshold],[0,max(dbl_sub['y'])],color='green')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.,fontsize=15)
+        plt.xlabel('MetaDEG of '+ct_pair[0],fontsize=15)
+        plt.ylabel('MetaDEG of '+ct_pair[1],fontsize=15)
+        plt.title('Identified hetero-dbls \nfrom putative doublets',fontsize=18)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        if return_fig:
+            return dbl_onhit, fig
+
+    return dbl_onhit
+
+
 
 

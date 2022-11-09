@@ -47,6 +47,18 @@ Performing total-mRNA-ratio-aware differentail analysis.
    tomas.lrt.summarize2DE
 
 
+Multiple-cell-type and scRNA-only scenario
+------------------------------------------
+
+Using computational methods to perform unsupervised cell type identification and heterotypic doublet refinement.
+
+.. autosummary::
+   :toctree: generated/
+
+   tomas.auxi.extract_specific_genes
+   tomas.auxi.inferHeteroDbl
+
+
 Visualization
 -------------
 

@@ -19,7 +19,16 @@ Total-mRNA-aware differential analysis
    
    tutorial_DE
    
+
+Multiple-cell-type scenario with only scRNA-seq data
+----------------------------------------------------
+
+.. toctree::
+   :maxdepth:1
    
+   tutorial_scRNAonly
+
+
 Graphical user interface
 ------------------------
 
