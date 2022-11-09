@@ -38,7 +38,6 @@ snowballstemmer==2.2.0
     # via sphinx
 sphinx==5.0.2
     # via -r requirements.in
-sphinx_trd_theme==1.0.0
 sphinxcontrib-applehelp==1.0.2
     # via sphinx
 sphinxcontrib-devhelp==1.0.2
