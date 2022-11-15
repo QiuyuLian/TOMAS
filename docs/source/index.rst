@@ -17,28 +17,17 @@ Key applications
 ----------------
 
 * infer total-mRNA ratios between cell populations
-* perform total-mRNA-aware sinlge-cell analyses including differential expression analysis and functional enrichment analysis
-* identify potentially key genes which are moderately expressed
+* perform total-mRNA-aware sinlge-cell analyses including differential expression (DE) analysis and functional enrichment analysis
 * visualize and compare the results with or without considering the total-mRNA differences
-* correct the distortion induced by mRNA recovery rate decay 
-
-
-
-TOMAS's contribution to your research
--------------------------------------
-
-If you use droplet-based scRNA-seq technique in your research, TOMAS could 
- * provide a computational framework to control total mRNA content differences between cell populations;
- * empower accurate scRNA-seq analyses including differential expression analysis and functional enrichment analysis, especially for datasets with large total mRNA content differences between cell types;
- * enable large-scale, low per-cell cost scRNA-seq experiments as limiting the cell throughput on purpose to avoid doublets is no longer nesscary; 
- * improve the sensitivity and statistical power in detecting and studying rare cell types.
+* correct the distortion of scRNA-seq data induced by mRNA recovery rate decay 
+* identify potential marker genes which are expressed at moderate level and thus more sensitive to total mRNA differences
 
 
 
 Getting started with TOMAS
 --------------------------
 
-If you are new to TOMAS and hope to apply it on your own data analysis, please first check out the :doc:`installation` for how to install TOMAS and the :doc:`tutorials` section for detailed information. If your data is a general scRNA-seq dataset, check out the :doc:`general_case`. If you have conducted sorting and cell hashing before single-cell library prep., check out the :doc:`hashing_case`.
+If you want to use TOMAS to analyze your scRNA-seq data, please first install TOMAS according to the :doc:`installation` tutorial and then check out the :doc:`tutorials` section for detailed information. The :doc:`TOMAS_basic` and :doc:`Total_mRNA_aware_analyses` will introduce you the major APIs of TOMAS to infer total-mRNA ratios and perform accuarte single-cell analyses with a basic two-cell-type case. Then according to your single-cell experiment design, you could choose how to run TOMAS. If you have presort cells and perform cell hashing before single-cell library prep., follow the tutorial for :doc:`hashing_case`. If you just conduct a generic single-cell library prep., follow the tutorial :doc:`Generic_case`. 
 
 
 

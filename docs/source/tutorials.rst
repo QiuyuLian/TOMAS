@@ -1,38 +1,12 @@
 Tutorials
 =========
+Still under construction.
 
+.. nbgallery::
 
-Total mRNA ratio inference
---------------------------
-
-.. toctree::
-   :maxdepth:1
-   
-   tutorial_ratio
-   
-   
-Total-mRNA-aware differential analysis
---------------------------------------
-
-.. toctree::
-   :maxdepth:1
-   
-   tutorial_DE
-   
-
-Multiple-cell-type scenario with only scRNA-seq data
-----------------------------------------------------
-
-.. toctree::
-   :maxdepth:1
-   
-   tutorial_scRNAonly
-
-
-Graphical user interface
-------------------------
-
-.. toctree::
-
-   gui.rst
+   TOMAS_basics
+   Total_mRNA_aware_analyses
+   Generic_case
+   Hashing_case
+   gui
 
