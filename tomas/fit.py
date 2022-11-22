@@ -33,7 +33,7 @@ class HiddenPrints:
 
 #%% DMN optimization with python 
 
-def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=None):
+def dmn(adata, groupby, groups, maxiter=1000, subset=None, verbose=2, verbose_interval=10):
     '''
     Fit Dirichlet-Multinomial distribution with UMI counts of homo-droplet populations.
 
@@ -62,10 +62,11 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
 
     '''
     
-    if not os.path.exists(output):
-        raise ValueError("Provide a valid path to save results!")
+    # if not os.path.exists(output):
+    #     os.makedirs(output)
     
     counts_list = []
+    vidx_list = []
     for group in groups:
     
         counts = adata[adata.obs[groupby]==group,:].X
@@ -74,6 +75,10 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
         
         if not np.issubdtype(counts.dtype, np.integer):
             counts = counts.astype(int)
+        
+        vidx = counts.sum(0)!=0
+        vidx_list.append(vidx)
+        counts = counts[:,vidx]
         
         if subset is not None:
             if counts.shape[0] > subset:
@@ -85,19 +90,36 @@ def dmn(adata, groupby, groups, output, c_version=True, maxiter=2000, subset=Non
     n_cores = min(len(groups), int(mp.cpu_count()*0.8))
     
     pool = mp.Pool(n_cores)  
-    result_compact = [pool.apply_async( _job_fitdmn, (counts_list[i], groups[i], c_version, maxiter, output) ) for i in range(len(groups))]
+    result_compact = [pool.apply_async( _fitdmn, (counts_list[i], groups[i], maxiter, verbose, verbose_interval) ) for i in range(len(groups))]
     pool.close()
     pool.join()
     
     alpha_out = [term.get() for term in result_compact] 
     
-    alpha_df = pd.DataFrame(np.array(alpha_out).T, index=adata.var_names, columns=groups)
+    #alpha_df = pd.DataFrame(np.array(alpha_out).T, index=adata.var_names, columns=groups)
+    alpha_df = pd.DataFrame(np.ones([adata.n_vars,len(groups)])*1e-12, index=adata.var_names, columns=groups)
+    for gidx,gval in enumerate(groups):
+        alpha_df.loc[vidx_list[gidx],gval] = alpha_out[gidx]
+        
     adata.varm['para_diri'] = alpha_df
+    
     
 
 
+def _fitdmn(counts,group,maxiter,verbose,verbose_interval):
+    
+    dmm = pyDIMM.DirichletMultinomialMixture(n_components=1, 
+                                             max_iter=maxiter, 
+                                             n_init=1, 
+                                             verbose=verbose,
+                                             verbose_interval=verbose_interval).fit(counts)
+    print(group+' is done!')
+    return np.ravel(dmm.alphas)
 
 
+
+
+'''
 def _job_fitdmn(counts, group,c_version,maxiter,output):
 
     print('Start fitting '+group+' droplets. This may take a long time. Please wait...\n')
@@ -125,7 +147,7 @@ def _job_fitdmn(counts, group,c_version,maxiter,output):
         log.close()
     
     return alpha_vec
-
+'''
 
 
 

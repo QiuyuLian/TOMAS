@@ -8,8 +8,8 @@ Created on Wed Jul  6 02:29:17 2022
 
 import numpy as np
 import seaborn as sns    
-from scipy import stats
-import matplotlib
+import scipy 
+#import matplotlib
 import copy
 import pandas as pd
 import os
@@ -17,6 +17,14 @@ import itertools
 from matplotlib import pyplot as plt
 import warnings
 
+#from auxi import rm_outliers
+def rm_outliers(x):
+    iqr = scipy.stats.iqr(x)
+    outlier_lb = np.quantile(x,0.25)-1.5*iqr
+    outlier_ub = np.quantile(x,0.75)+1.5*iqr
+    x_shrinkage = x[x > outlier_lb]
+    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
+    return x_shrinkage#,(outlier_lb,outlier_ub)
 
 
 def dmn_convergence(group,output,return_fig=None):
@@ -114,17 +122,7 @@ def alpha_opt_process(record, saveFig = False, filename=None):
 '''
 
 
-def rm_outliers(x):
-    iqr = stats.iqr(x)
-    outlier_lb = np.quantile(x,0.25)-1.5*iqr
-    outlier_ub = np.quantile(x,0.75)+1.5*iqr
-    x_shrinkage = x[x > outlier_lb]
-    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
-    return x_shrinkage#,(outlier_lb,outlier_ub)
-
-
-
-def logRatio_dist(r_list,nbins=20,return_fig=None):
+def logRatio_dist(r_list,nbins=20,return_fig=None,rm_outlier=True):
     
     #output = para.get('output',None)
     custom_palette = sns.color_palette("Greens",5)
@@ -133,8 +131,11 @@ def logRatio_dist(r_list,nbins=20,return_fig=None):
     xy_ticks = np.arange(xy_lim[0]+2, xy_lim[1], step=2)
 
     x = np.log2(r_list)
-    x_shrinkage = rm_outliers(x)
-
+    if rm_outlier:
+        x_shrinkage = rm_outliers(x)
+    else:
+        x_shrinkage = x
+        
     #plt.figure(figsize=(6,8),dpi=256)
     fig, (ax_box,ax_hist) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.1, .9)})
 
@@ -142,7 +143,7 @@ def logRatio_dist(r_list,nbins=20,return_fig=None):
     ax_box.set(xlabel='')
 
     xx = np.linspace(np.min(x)-1,np.max(x)+1,100)
-    yy_shrinkage = stats.norm.pdf(xx,np.mean(x_shrinkage),np.std(x_shrinkage))
+    yy_shrinkage = scipy.stats.norm.pdf(xx,np.mean(x_shrinkage),np.std(x_shrinkage))
 
     a = plt.hist(x,nbins,label='trueR',alpha=0.5, color=custom_palette[4],density=True)
     top = np.ceil( np.max(a[0])/5 )*5
