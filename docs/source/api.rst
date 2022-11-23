@@ -1,13 +1,6 @@
 API
 ===
 
-Import TOMAS as tm:
-
->>> import TOMAS as tm
-
-
-.. module:: tomas
-
 
 
 Fitting
