@@ -966,7 +966,7 @@ def heteroDbl(adata, d_groupby, ct_groupby, de_sorted=None,dbl_groupby = 'hetero
         print('Detect doublets composed by cell type '+pair[0]+' and '+pair[1]+'.')
         dbl_candidate = heteroDbl_bc(adata, dbl,  d_groupby = d_groupby, ct_groupby = ct_groupby, de_sorted = de_sorted,vis=vis)
         adata.obs.loc[dbl_candidate,dbl_groupby] = dbl  
-        print(str(len(dbl))+' putative heterotypic doublets detected.')        
+        print(str(len(dbl_candidate))+' putative heterotypic doublets detected.')        
 
 
 
