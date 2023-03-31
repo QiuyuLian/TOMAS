@@ -6,9 +6,6 @@ Created on Wed Jul  6 02:41:49 2022
 @author: qy
 """
 
-
-
-
 #import pickle
 import numpy as np
 import scipy
@@ -20,6 +17,60 @@ import tqdm
 import multiprocessing as mp
 import math
 from scipy import stats
+
+
+
+
+
+def annote_clusters(adata_psgl, ct_mapper, groupby='leiden',anno_group=None):
+    '''
+    Annotate clusters with domain knowledge of cell  type markers.
+
+    Parameters
+    ----------
+    adata_psgl : AnnData
+        UMI matrix of putative singlets (homotypic droplets).
+    ct_mapper : dic
+        Domain knowledge of cell type markers. The format must be {'gene1':'celltype1','gene2':'cellltype2','gene3':'celltype3'}.
+    groupby : 'str'
+        The key of the clustering results stored in adata.obs. The default is 'leiden'.
+    anno_group : 'str', optional
+        The key of the output annotation of clusters stored in adata.obs. The default is value of 'groupby' with '_anno' as suffix.
+
+    Returns
+    -------
+    None. The results are saved in adata.obs["groupby"_anno'].
+
+    '''
+
+    if 'rank_genes_groups' not in adata_psgl.uns:
+        sc.tl.rank_genes_groups(adata_psgl, groupby, method='wilcoxon')
+
+    result = adata_psgl.uns['rank_genes_groups']
+    groups = result['names'].dtype.names
+
+    # ct_mapper = {'g_2426':'A','g_10031':'B','g_5031':'C','g_5497':'D'} 
+
+    # Extract the logFC of the input marker genes in all clusters 
+    lf_list = []
+    for k in groups:
+
+        gidx = [list(result['names'][k]).index(g) for g in ct_mapper.keys()]
+        lf_list.append(result['logfoldchanges'][k][gidx])
+
+    lf_df = pd.DataFrame(np.array(lf_list),index=groups,columns=ct_mapper.keys())
+    # row: cluter, col: marker, value: logFC
+
+    clusters = [lf_df.index[np.argmax(lf_df[g])] for g in ct_mapper.keys()]
+    annos = dict(zip(clusters, ct_mapper.values()))
+    # map clusters to cell types 
+
+    if anno_group is None:
+        anno_group = groupby + '_anno'
+
+    adata_psgl.obs[anno_group] = [annos[g] for g in adata_psgl.obs[groupby]]
+
+    print('Cell type annotation is saved in .obs['+anno_group+'].')
 
 
 
@@ -45,6 +96,10 @@ def extract_specific_genes(adata_psgl, groupby, pval=0.001, logfc=0):
         Identified heterotypic doublets composed by the input cell type pair.
 
     '''
+    
+    if 'rank_genes_groups' not in adata_psgl.uns:
+        sc.tl.rank_genes_groups(adata_psgl, groupby, method='wilcoxon')
+        
     result = adata_psgl.uns['rank_genes_groups']
     groups = result['names'].dtype.names
     de_df = pd.DataFrame({group + '_' + key[:1]: result[key][group]

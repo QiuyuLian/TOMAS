@@ -120,25 +120,31 @@ def alpha_opt_process(record, saveFig = False, filename=None):
 
     plt.show()
 '''
+import math
 
-
-def logRatio_dist(r_list,nbins=20,return_fig=None,rm_outlier=True):
+def logRatio_dist(r_list,nbins=20,return_fig=None,rm_outlier=True,fig_size=(4,4),dpi=64):
     
     #output = para.get('output',None)
     custom_palette = sns.color_palette("Greens",5)
     
-    xy_lim = [np.log2(1)-6, np.log2(1)+6] #[np.floor(v_min), np.floor(v_max)]
-    xy_ticks = np.arange(xy_lim[0]+2, xy_lim[1], step=2)
-
     x = np.log2(r_list)
+    
+    xy_lim = [math.floor(np.min(x)), math.ceil(np.max(x))] #[np.log2(1)-6, np.log2(1)+6] #[np.floor(v_min), np.floor(v_max)]
+    x_m = round(np.mean(x))
+    x_margin = np.max(np.array(xy_lim)-x_m)
+    #xy_ticks = np.arange(xy_lim[0]+2, xy_lim[1], step=2)
+    xy_ticks = np.arange(x_m-x_margin, x_m+x_margin+1, step=1)
+    xy_ticks = xy_ticks[xy_ticks>0]
+    
     if rm_outlier:
         x_shrinkage = rm_outliers(x)
     else:
         x_shrinkage = x
         
     #plt.figure(figsize=(6,8),dpi=256)
-    fig, (ax_box,ax_hist) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.1, .9)})
-
+    fig, (ax_box,ax_hist) = plt.subplots(2, sharex=True, dpi=dpi,gridspec_kw={"height_ratios": (.1, .9)})
+    fig.set_figheight(fig_size[0])
+    fig.set_figwidth(fig_size[1])
     sns.boxplot(data=x, ax=ax_box, orient="h",fliersize=1,color = custom_palette[4])
     ax_box.set(xlabel='')
 
@@ -146,8 +152,8 @@ def logRatio_dist(r_list,nbins=20,return_fig=None,rm_outlier=True):
     yy_shrinkage = scipy.stats.norm.pdf(xx,np.mean(x_shrinkage),np.std(x_shrinkage))
 
     a = plt.hist(x,nbins,label='trueR',alpha=0.5, color=custom_palette[4],density=True)
-    top = np.ceil( np.max(a[0])/5 )*5
-    plt.plot([np.mean(x_shrinkage), np.mean(x_shrinkage)], [0,0.3], linestyle='dashed', color='black')
+    top = np.max(a[0])*1.05
+    plt.plot([np.mean(x_shrinkage), np.mean(x_shrinkage)], [0,top], linestyle='dashed', color='black')
     plt.plot(xx,yy_shrinkage,label='rm outliers',color='black')
     plt.xlabel('Total mRNA ratio',fontsize=18)
     plt.ylabel('Density',fontsize=18)
@@ -168,7 +174,7 @@ sns.set(style="ticks")
 def get_bins(x,bw=0.05):
     return np.arange(min(x),max(x)+bw,bw)
 
-def UMI_hist(adata,x_hist='log10UMIs',groupby=None,show_groups='all',return_fig=None,**fig_para):
+def UMI_hist(adata,x_hist='log10UMIs',groupby=None, groups='all',return_fig=None,**fig_para):
     '''
     Visualize the log-UMI-amount distribution.
 
@@ -181,8 +187,8 @@ def UMI_hist(adata,x_hist='log10UMIs',groupby=None,show_groups='all',return_fig=
         The key of logUMI values stroed in adata.obs. The default is 'log10UMIs'.
     groupby : str
         The key of the droplet categories stored in adata.obs. 
-    show_groups : list of strings, optional
-        Droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby] to display. 
+    groups : list of strings, optional
+        Droplet categories to visualize logUMI distributions. It should be eithor 'all' or a list of cell type annotations specified in adata.obs[groupby].
         The default is 'all'.
     return_fig : bool, optional
         Return the matplotlib figure. The default is None.
@@ -192,7 +198,7 @@ def UMI_hist(adata,x_hist='log10UMIs',groupby=None,show_groups='all',return_fig=
     Raises
     ------
     ValueError
-        If 'show_groups' specifies categories not matching with adata.obs[groupby].
+        If 'groups' specifies categories not matching with adata.obs[groupby].
 
     Returns
     -------
@@ -225,14 +231,14 @@ def UMI_hist(adata,x_hist='log10UMIs',groupby=None,show_groups='all',return_fig=
         col_list = sns.color_palette(palette, 1)
         plt.hist(obsdata[x_hist],bins,alpha=0.6, color=col_list[0])
     else:
-        if show_groups == 'all':
-            show_groups = obsdata[groupby].unique()
-        elif isinstance(show_groups,list) and len([1 for v in show_groups if v not in obsdata[groupby].unique()]):
+        if groups == 'all':
+            groups = obsdata[groupby].unique()
+        elif isinstance(groups,list) and len([1 for v in groups if v not in obsdata[groupby].unique()]):
             raise ValueError("'show_groups' contains values absent in 'groupby'.")
             
-        col_list = sns.color_palette(palette, len(show_groups))
-        v_list = [obsdata[x_hist][obsdata[groupby]==g] for g in show_groups]        
-        for i,g in enumerate(show_groups):
+        col_list = sns.color_palette(palette, len(groups))
+        v_list = [obsdata[x_hist][obsdata[groupby]==g] for g in groups]        
+        for i,g in enumerate(groups):
             plt.hist(v_list[i],bins,label=g,alpha=0.6, color=col_list[i])
 
         plt.legend(loc='upper right')
@@ -398,7 +404,7 @@ def volcano_2DE(de_df, marker_list=None, marker_colors=None, return_fig=None):
 
     if marker_list is not None:
         for idx in range(len(marker_list)):
-            plt.scatter(fc_y[marker_list[idx]], pval_y[marker_list[idx]],color=marker_colos[idx],s=20)
+            plt.scatter(fc_y[marker_list[idx]], pval_y[marker_list[idx]],color=marker_colors[idx],s=20)
             
     plt.plot([0,0],[0,323],c='black',linestyle='dashed')
     plt.plot([-6,6],[-np.log10(0.05),-np.log10(0.05)],c='black',linestyle='dashed')

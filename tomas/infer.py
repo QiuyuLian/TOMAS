@@ -13,6 +13,7 @@ import pandas as pd
 import scipy
 import scanpy as sc
 import copy
+from sklearn.mixture import GaussianMixture
 
 #from auxi import rm_outliers
 def rm_outliers(x):
@@ -26,7 +27,7 @@ def rm_outliers(x):
 #%% Infer Total-mRNA Ratios 
 
 
-def ratios_bc(adata_mg, dblgroup, max_iter=20, tol=1e-3, n_logR=100, n_p=1000, warm_start=False, verbose=0, verbose_interval=2):
+def ratios_bc(adata_mg, dblgroup, max_iter=100, tol=1e-3, n_logR=100, n_p=1000, warm_start=False, verbose=0, verbose_interval=2):
     '''
     Infer the total-mRNA ratio between two cell types given the heterotypic doublets composed by the two cell types.
 
@@ -57,6 +58,7 @@ def ratios_bc(adata_mg, dblgroup, max_iter=20, tol=1e-3, n_logR=100, n_p=1000, w
     None. The results are saved in .uns['ratio'] of the input AnnData.
 
     '''
+    
     alpha0,alpha1 = adata_mg.varm['para_diri'].transpose()
     Y = adata_mg.X
     n = len(Y)
@@ -107,7 +109,7 @@ def ratios_bc(adata_mg, dblgroup, max_iter=20, tol=1e-3, n_logR=100, n_p=1000, w
         ratio_dic['w_best'] = w_best
         ratio_dic['log2R_para'] = [log2R_m, log2R_std]
         ratio_dic['R_est'] = 2**log2R_m
-        ratio_dic['ll_best'] = ll_best
+        ratio_dic['ll_best'] = ll_best.sum(0)
         ratio_dic['niter'] = 0
         adata_mg.uns['ratio'] = ratio_dic
             
@@ -144,9 +146,10 @@ def ratios_bc(adata_mg, dblgroup, max_iter=20, tol=1e-3, n_logR=100, n_p=1000, w
         if sum(replace) > 0:
 
             w_best[replace] = w_best_tmp[replace]
-            #log2R_m,log2R_std = norm.fit(rm_outliers(np.log2((1-w_best)/w_best)))
-            log2R_m,log2R_std = norm.fit(np.log2((1-w_best)/w_best))
-            #log2R_std = np.max([log2R_std,log2R_std_prior])
+            log2R_m,log2R_std = norm.fit(rm_outliers(np.log2((1-w_best)/w_best)))
+            #log2R_m,log2R_std = norm.fit(np.log2((1-w_best)/w_best))
+            if log2R_std < 0.01: #
+                log2R_std = np.max([log2R_std,log2R_std_prior])
 
             ll_best[2,replace] = logR_ll_max[replace]
             ll_best[3,replace] = mult_ll_max[replace]
@@ -214,6 +217,18 @@ def ratios_bc(adata_mg, dblgroup, max_iter=20, tol=1e-3, n_logR=100, n_p=1000, w
     adata_mg.uns['ratio']['ll_best'] = ll_best
     adata_mg.uns['ratio']['niter'] += niter
 
+    ## check confidence
+    r_list = (1-w_best)/w_best
+    if len(r_list) < 15:
+        log2r = np.log2(r_list)
+    else:
+        log2r = rm_outliers(np.log2(r_list))
+
+    unimodal = GaussianMixture(1).fit(log2r.reshape(-1,1))
+    bimodal =  GaussianMixture(2).fit(log2r.reshape(-1,1))
+    lrt = -2*(unimodal.score_samples(log2r.reshape(-1,1)).sum() - bimodal.score_samples(log2r.reshape(-1,1)).sum())
+    pval = scipy.stats.chi2.sf(lrt, 3)
+    adata_mg.uns['ratio']['confidence'] = pval
 
 
 
@@ -253,273 +268,6 @@ def initialize_w(Y, alpha1, alpha2):
 
     return w
 
-
-
-#%% old version of inferring ratios
-
-def ratio_2types(adata,groupby,groups,output,subset=100,nrepeat=10):
-    '''
-    
-
-    Parameters
-    ----------
-    adata_dbl_mg : AnnData
-        The UMI count matrix of hetero-doublets in metagenes.
-        Rows correspond to droplets and columns to metagenes.
-    output : path
-        Path to save the results.
-    nrepeat : int, optional
-        Times to repeat synthesizing doublets to infer ratios. The default is 10.
-
-    Returns
-    -------
-    esti_r_list : numpy.ndarray
-        Estimate of total mRNA ratio of each hetero-dbouelt.
-
-    '''
-    if not os.path.exists(output):
-        os.makedirs(output)
-        
-    name=groups[2]
-    logpath = os.path.join(output,'_'.join(['rlog',name]))
-    if not os.path.exists(logpath):
-        os.makedirs(logpath)
-        
-    
-    adata_dbl_mg = get_dbl_mg_bc(adata,groupby,groups)
-    
-    mg_Alpha_new = adata_dbl_mg.varm['para_diri'].transpose()
-    Y_new = adata_dbl_mg.X
-    
-    if subset is not None:
-        if Y_new.shape[0] > subset:
-            idx = np.random.choice(Y_new.shape[0], subset, replace=False)
-            Y_new = Y_new[idx,:]
-    
-    '''
-    ### use raw data to init
-    count_dbl = adata[adata.obs[groupby]==groups[2],:].X
-    if isinstance(count_dbl, scipy.sparse.csr.csr_matrix):
-        count_dbl = count_dbl.toarray()
-         
-    w_init = initialize_w(count_dbl, adata.varm['para_diri'][groups[0]].values, adata.varm['para_diri'][groups[1]].values)
-    ###
-    '''
-    #w_init = initialize_w(Y_new, mg_Alpha_new[0], mg_Alpha_new[1])
-    #estimateW(mg_Alpha_new,Y_new,logpath,w_init,nrepeat,name)
-    estimateW(mg_Alpha_new,Y_new,logpath,nrepeat=nrepeat,name=name)
-
-    
-    ll_list = []
-    for ridx in range(nrepeat):
-        RandLL = pd.read_csv(os.path.join(logpath,'.'.join(['RandLL',name,str(ridx),'csv'])),header=0,index_col=0)
-        ll_list.append(RandLL['LL'].values[-1])
-    
-    ll_argmax = np.argmax(ll_list)
-    #print(ll_argmax)
-
-    ridx = ll_argmax
-    
-    R_est0 = pd.read_csv(os.path.join(logpath,'.'.join(['Rtrack',name,str(ridx),'csv'])),header=0,index_col=0)
-    esti_r_list = R_est0.iloc[:,-1].values
-    
-    #w_corrected = [ratio_correction(1/(r+1),left_mg_pmass[ct][0],left_mg_pmass[ct][1]) for r in esti_r_list]
-    #r_list = [(1-w)/w for w in esti_r_list]
-    
-    return esti_r_list
-
-
-
-def estimateW(mg_Alpha_new,Y_new,output,w_init=None,nrepeat=10,name='',n_cores=None):
-
-    ndoublets = len(Y_new)
-
-    Alpha_mat = mg_Alpha_new
-    
-    alpha0 = Alpha_mat[0]
-    alpha1 = Alpha_mat[1]
-    
-    if w_init is None:
-        w_init = initialize_w(Y_new, alpha0, alpha1)
-        
-    for repeat in range(nrepeat):
-    
-        log = open(os.path.join(output,'.'.join(['log',name,str(repeat),'txt'])),'w',buffering=1)
-    
-        t0 = time.time() 
-        log.write('start time '+str(t0)+'\n')
-    
-        # initialize  
-        r_init = 2**np.random.normal(np.log2((1-w_init)/w_init),1)
-        log.write('initizalized R '+str(r_init)+'\n')
-        logR_m_record = []
-        LL_record = []
-        r_track = []
-    
-        logR_m = np.log2(r_init)
-        logR_std = 1
-        logR_m_record.append(logR_m)
-    
-        num_p = 1000
-        num_w = 100
-        maxiter = 2
-        delta_LL_tol = 0.1
-        job_unit = 20
-        if n_cores is None:
-            n_cores = min(50, int(mp.cpu_count()*0.8))
-        
-        parallel = True
-        if ndoublets <= job_unit:
-            parallel = False
-    
-        if parallel:
-            # number of samples for each parallel job in E-step
-            num_jobs = ndoublets // job_unit
-            jobs_sidx = [i*job_unit for i in range(num_jobs)]
-            jobs_sidx.append(ndoublets)
-    
-        keeptimes = []
-        keeptimes_tol = 5
-    
-        LL = -1e308
-        iteration = 0
-        LL_record.append(LL)
-    
-        fp_dll0 = dirichlet.logpdf(alpha0/sum(alpha0), alpha0) 
-        fp_dll1 = dirichlet.logpdf(alpha1/sum(alpha1), alpha1) 
-    
-        while( (len(keeptimes) <  keeptimes_tol) and (iteration < maxiter)):
-            # Termination creteria: 
-            # ------------------------- (1). iteration times exceed the maximum.
-            # ------------------------- (2). the delta_LL is less than the threshold k times in a row.   
-    
-            # print('iteration',iteration)
-            log.write('iteration '+str(iteration)+'\n')
-    
-            tp0 = time.time()
-            if parallel:
-    
-                pool = mp.Pool(n_cores)  
-                result_compact = [pool.apply_async( job_Estep, (Y_new, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, jobs_sidx[i], jobs_sidx[i+1]) ) for i in range(num_jobs)]
-                pool.close()
-                pool.join()
-    
-                results = [term.get() for term in result_compact] 
-                ll_mat = np.concatenate([term[0] for term in results])  # num_doublet x num_p
-                w_mat = np.concatenate([term[1] for term in results])   # num_doublet x num_p
-    
-            else:
-    
-                ll_mat, w_mat = job_Estep(Y_new, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, 0, len(Y_new))
-    
-            log.write('\tE step time:'+str(time.time()-tp0)+'\n')
-    
-            ### M-step:
-            best_w_idx = [np.argmax(term) for term in ll_mat]
-            ll_doublet = [ll_mat[idx][val] for idx,val in enumerate(best_w_idx)]
-    
-            delta_LL = np.sum(ll_doublet) - LL
-    
-            w_best = [w_mat[idx][val] for idx,val in enumerate(best_w_idx)]
-            r_best = [(1-w)/w for w in w_best]
-    
-            if delta_LL > delta_LL_tol:
-    
-                LL = np.sum(ll_doublet)
-                logR_m = np.mean(np.log2(r_best))
-                logR_std = np.std(np.log2(r_best))
-    
-                logR_m_record.append(logR_m)
-                LL_record.append(LL)
-                r_track.append(r_best)
-
-                log.write('\testi R '+str(2**logR_m)+'\n\tdelta LL '+str(delta_LL)+'\n')
-    
-            keeptimes.append(delta_LL < delta_LL_tol)
-            if not np.all(keeptimes):
-                keeptimes = []    
-    
-            iteration += 1
-    
-        tconsuming = time.time() - t0
-    
-        est_R = 2**logR_m_record[-1]#2**np.median(logR_m_record[2:]) if len(logR_m_record) > 2 else 2**logR_m_record[-1]
-
-        log.write('final R '+str(est_R)+'\n')
-        log.write('time '+str(tconsuming)+'\n\n\n')
-
-        log.close()
-    
-        ## record R_estimation and LL each update
-        R_LL_df = pd.DataFrame({'R':2**np.array(logR_m_record),'LL':LL_record})
-        R_LL_df.to_csv(os.path.join(output,'.'.join(['RandLL',name,str(repeat),'csv'])))
-    
-        ## record r estimated for each doublet per update
-        r_track_df = pd.DataFrame(np.array(r_track).transpose(),columns=range(len(r_track)))
-        r_track_df.to_csv(os.path.join(output,'.'.join(['Rtrack',name,str(repeat),'csv'])))
-     
-
-
-def job_Estep(Y_test, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, start_sidx, end_sidx):
-    
-    np.random.seed()
-    
-    sidx_range = range(start_sidx, end_sidx)
-    alpha0, alpha1 = Alpha_mat
-    
-    ybatch_ll_list = []
-    ybatch_w_list = []
-  
-    ### E-setp:
-    for i in sidx_range:
-        
-        y = Y_test[i]
-        
-        logR_sampling = np.random.normal(logR_m, logR_std, num_w)
-        W = 1/(2**logR_sampling+1)
-    
-        logR_ll = norm.logpdf(logR_sampling, logR_m, logR_std) 
-        
-        d_p0_sampling  = np.random.dirichlet(alpha0, num_p)
-        d_p0_sampling = get_P_valid(d_p0_sampling)
-        diri_ll_0 = [dirichlet.logpdf(p, alpha0)  - fp_dll0 for p in d_p0_sampling]
-        
-        d_p1_sampling  = np.random.dirichlet(alpha1, num_p)
-        d_p1_sampling = get_P_valid(d_p1_sampling)
-        diri_ll_1 = [dirichlet.logpdf(p, alpha1) - fp_dll1 for p in d_p1_sampling]
-                
-        y_ll = []
-        for w_idx in range(len(W)):
-            
-            w = W[w_idx]
-            p_wsum = d_p0_sampling * w + d_p1_sampling * (1-w)
- 
-            sum_term = p_wsum.sum(1)
-            p_wsum = p_wsum/sum_term.reshape(-1,1)       
-            
-            mult_ll = (np.log(p_wsum)*y).sum(1)
-
-            pvec_y_ll = np.array(diri_ll_0)+np.array(diri_ll_1)+logR_ll[w_idx]+np.array(mult_ll) 
-            #pvel_y_ll_midx = np.argmax(pvec_y_ll)
-    
-            y_ll.append(np.max(pvec_y_ll))
-
-        ybatch_ll_list.append(y_ll)
-        ybatch_w_list.append(W) 
-        
-  
-    ll_mat = np.array(ybatch_ll_list) # ndoublet x num_w
-    w_mat = np.array(ybatch_w_list)   # ndoublet x num_w
-    
-    return ll_mat, w_mat
-
-
-
-def get_P_valid(P):
-    
-    P[P==0] = 1e-10 
-
-    return P
 
 
 
@@ -565,7 +313,8 @@ def get_dbl_mg(adata,groupby,groups='all',output=None, num_mg = 100, kl_cutoff=N
     '''
     if isinstance(groups, str):
         if groups == 'all':
-            groups = adata.obs[groupby].unique().tolist()
+            #groups = adata.obs[groupby].unique().tolist()
+            groups = [d for d in adata.obs[groupby].unique() if len(d.split('_'))==2]
             if 'unknown' in groups:
                 groups.remove('unknown')
         else:
@@ -596,28 +345,14 @@ def get_dbl_mg(adata,groupby,groups='all',output=None, num_mg = 100, kl_cutoff=N
 
     return adata_mgdic
     
-    adata_mgdic = {}
-    for dblgroup in groups:
-        mg_tmp = get_dbl_mg_bc(adata, 
-                               groupby, 
-                               dblgroup, 
-                               output=output,
-                               num_mg=num_mg, 
-                               kl_cutoff=kl_cutoff,
-                               merging_threshold=merging_threshold,
-                               skip_threshold=skip_threshold,
-                               alphaMin=alphaMin)
-        adata_mgdic[dblgroup] = mg_tmp
 
-    return adata_mgdic
-    
+
 
 
 
 def get_dbl_mg_bc(adata, groupby, dblgroup, output=None, num_mg = 100, kl_cutoff=None, merging_threshold=5, skip_threshold=2,alphaMin = 1):
     '''
     Extract metagenes from raw UMI counts of a certain type of heterotypic doublets.
-
     Parameters
     ----------
     adata : AnnData
@@ -640,70 +375,79 @@ def get_dbl_mg_bc(adata, groupby, dblgroup, output=None, num_mg = 100, kl_cutoff
          this gene is skipped. The default is 2.
     alphaMin : float, optional
          Individual genes with alpha greater than the threshold are skipped in mergging step and considerted as a specifial metagene with one member gene. The default is 1.
-
     Returns
     -------
     adata_dbl_mg_top : AnnData
         The UMI count matrix of shape `n_obs` × `n_metangenes`.
         Rows correspond to droplets and columns to metagenes.
-
     '''
-    groups = dblgroup.split('_')+[dblgroup]
-    raw_Alpha1_0 = adata.varm['para_diri'][groups[0]]
-    raw_Alpha2_0 = adata.varm['para_diri'][groups[1]]
-    
+    groups = dblgroup.split('_') #+[dblgroup]
+
+    adata_dbl = adata[adata.obs[groupby]==dblgroup,:].copy()
+    adata_dbl = adata_dbl[:,adata_dbl.X.sum(0)>0]
+
+
+    #count_dbl = adata_dbl[adata_dbl.obs[groupby]==dblgroup,:].X
+    count_dbl = adata_dbl.X
+    if isinstance(count_dbl, scipy.sparse.csr_matrix):
+        count_dbl = count_dbl.toarray()
+
+
+    raw_Alpha1_0 = adata_dbl.varm['para_diri'][groups[0]]
+    raw_Alpha2_0 = adata_dbl.varm['para_diri'][groups[1]]
+
+
     if isinstance(kl_cutoff,float):
         # use genes with KL greater than cutoff to obtain meta-genes
-        kl = adata.varm['kl']
+        kl = adata_dbl.varm['kl']
         KL_filter_idx = np.where(kl > kl_cutoff)[0]
     else:
         KL_filter_idx = np.array([i for i in range(len(raw_Alpha1_0))])
-        
+
     raw_Alpha1 = raw_Alpha1_0[KL_filter_idx]
     raw_Alpha2 = raw_Alpha2_0[KL_filter_idx]
 
     mg_dic = get_mg(raw_Alpha1, raw_Alpha2, merging_threshold, skip_threshold,alphaMin)
-    
+
     mg_pool = mg_dic['mg_pool'] 
 
     mg_gidx = [list(KL_filter_idx[term]) for term in mg_pool]
     mg_genepool = [g for sub in  mg_gidx  for g in sub]
-    
+
     mg_alpha1 = mg_dic['alpha1']
     mg_alpha2 = mg_dic['alpha2']
-    
+
     left_gidx = list(set(range(len(raw_Alpha1_0))).difference(mg_genepool)) 
     mg_gidx.append(left_gidx)
-    
+
     # merge alpha and counts according to meta-genes
-    count_dbl = adata[adata.obs[groupby]==groups[2],:].X
-    if isinstance(count_dbl, scipy.sparse.csr.csr_matrix):
-        count_dbl = count_dbl.toarray()
-        
+
     mg_Alpha_arr = np.concatenate((np.array([mg_alpha1, mg_alpha2]), np.array([[sum(raw_Alpha1_0)-sum(mg_alpha1)],[sum(raw_Alpha2_0)-sum(mg_alpha2)]])),axis=1)
     Y = np.transpose(np.array([np.sum(count_dbl[:,term],1) for term in mg_gidx]))
-    
-    adata_dbl_mg = sc.AnnData(Y)
-    adata_dbl_mg.obs_names = adata.obs_names[adata.obs[groupby]==groups[2]]
+
+    adata_dbl_mg = sc.AnnData(Y,dtype=Y.dtype)
+    adata_dbl_mg.obs_names = adata_dbl.obs_names#[adata_dbl.obs[groupby]==dblgroup]
     adata_dbl_mg.varm['para_diri'] = mg_Alpha_arr.transpose()
     if output is not None:
         if not os.path.exists(output):
             os.makedirs(output)
-        adata_dbl_mg.write_h5ad(os.path.join(output,groups[2]+'_dbl_mg.h5ad'))
+        adata_dbl_mg.write_h5ad(os.path.join(output,dblgroup+'_dbl_mg.h5ad'))
 
     # extract top num_mg 
     topmg_idx = [[i] for i in range(num_mg)] + [list(range(num_mg,  len(mg_gidx)))]
     mg_Alpha_new = np.transpose(np.array([np.sum(mg_Alpha_arr[:,term],1) for term in topmg_idx]))
     Y_new = np.transpose(np.array([np.sum(Y[:,term],1) for term in topmg_idx]))
-    
-    adata_dbl_mg_top = sc.AnnData(Y_new)
-    adata_dbl_mg_top.obs_names = adata.obs_names[adata.obs[groupby]==groups[2]]
+
+    adata_dbl_mg_top = sc.AnnData(Y_new, dtype=Y_new.dtype)
+    adata_dbl_mg_top.obs_names = adata_dbl.obs_names#[adata.obs[groupby]==dblgroup]
     adata_dbl_mg_top.varm['para_diri'] = mg_Alpha_new.transpose()
     if len(adata.uns.keys()):
         for val in adata.uns.keys():
             adata_dbl_mg_top.uns[val] = adata.uns[val]
 
-    return adata_dbl_mg_top        
+    return adata_dbl_mg_top
+
+
 
 
 
@@ -1077,8 +821,8 @@ def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=Non
     if vis:
         
         dbl_sub['pred'] = ['others']*dbl_sub.shape[0]
-        dbl_sub.loc[dbl_onhit,'pred'] = '-'.join(ct_pair)
-        dbl_sub['pred'] = pd.Categorical(dbl_sub['pred'],categories=['-'.join(ct_pair), 'others'])
+        dbl_sub.loc[dbl_onhit,'pred'] = '_'.join(ct_pair)
+        dbl_sub['pred'] = pd.Categorical(dbl_sub['pred'],categories=['_'.join(ct_pair), 'others'])
 
 
         fig = plt.figure(figsize=(11,4),dpi=64)
@@ -1115,3 +859,271 @@ def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=Non
 
 
 
+
+
+
+#%% old version of inferring ratios
+
+def ratio_2types(adata,groupby,groups,output,subset=100,nrepeat=10):
+    '''
+    
+
+    Parameters
+    ----------
+    adata_dbl_mg : AnnData
+        The UMI count matrix of hetero-doublets in metagenes.
+        Rows correspond to droplets and columns to metagenes.
+    output : path
+        Path to save the results.
+    nrepeat : int, optional
+        Times to repeat synthesizing doublets to infer ratios. The default is 10.
+
+    Returns
+    -------
+    esti_r_list : numpy.ndarray
+        Estimate of total mRNA ratio of each hetero-dbouelt.
+
+    '''
+    if not os.path.exists(output):
+        os.makedirs(output)
+        
+    name=groups[2]
+    logpath = os.path.join(output,'_'.join(['rlog',name]))
+    if not os.path.exists(logpath):
+        os.makedirs(logpath)
+        
+    
+    adata_dbl_mg = get_dbl_mg_bc(adata,groupby,groups)
+    
+    mg_Alpha_new = adata_dbl_mg.varm['para_diri'].transpose()
+    Y_new = adata_dbl_mg.X
+    
+    if subset is not None:
+        if Y_new.shape[0] > subset:
+            idx = np.random.choice(Y_new.shape[0], subset, replace=False)
+            Y_new = Y_new[idx,:]
+    
+    '''
+    ### use raw data to init
+    count_dbl = adata[adata.obs[groupby]==groups[2],:].X
+    if isinstance(count_dbl, scipy.sparse.csr.csr_matrix):
+        count_dbl = count_dbl.toarray()
+         
+    w_init = initialize_w(count_dbl, adata.varm['para_diri'][groups[0]].values, adata.varm['para_diri'][groups[1]].values)
+    ###
+    '''
+    #w_init = initialize_w(Y_new, mg_Alpha_new[0], mg_Alpha_new[1])
+    #estimateW(mg_Alpha_new,Y_new,logpath,w_init,nrepeat,name)
+    estimateW(mg_Alpha_new,Y_new,logpath,nrepeat=nrepeat,name=name)
+
+    
+    ll_list = []
+    for ridx in range(nrepeat):
+        RandLL = pd.read_csv(os.path.join(logpath,'.'.join(['RandLL',name,str(ridx),'csv'])),header=0,index_col=0)
+        ll_list.append(RandLL['LL'].values[-1])
+    
+    ll_argmax = np.argmax(ll_list)
+    #print(ll_argmax)
+
+    ridx = ll_argmax
+    
+    R_est0 = pd.read_csv(os.path.join(logpath,'.'.join(['Rtrack',name,str(ridx),'csv'])),header=0,index_col=0)
+    esti_r_list = R_est0.iloc[:,-1].values
+    
+    #w_corrected = [ratio_correction(1/(r+1),left_mg_pmass[ct][0],left_mg_pmass[ct][1]) for r in esti_r_list]
+    #r_list = [(1-w)/w for w in esti_r_list]
+    
+    return esti_r_list
+
+
+
+def estimateW(mg_Alpha_new,Y_new,output,w_init=None,nrepeat=10,name='',n_cores=None):
+
+    ndoublets = len(Y_new)
+
+    Alpha_mat = mg_Alpha_new
+    
+    alpha0 = Alpha_mat[0]
+    alpha1 = Alpha_mat[1]
+    
+    if w_init is None:
+        w_init = initialize_w(Y_new, alpha0, alpha1)
+        
+    for repeat in range(nrepeat):
+    
+        log = open(os.path.join(output,'.'.join(['log',name,str(repeat),'txt'])),'w',buffering=1)
+    
+        t0 = time.time() 
+        log.write('start time '+str(t0)+'\n')
+    
+        # initialize  
+        r_init = 2**np.random.normal(np.log2((1-w_init)/w_init),1)
+        log.write('initizalized R '+str(r_init)+'\n')
+        logR_m_record = []
+        LL_record = []
+        r_track = []
+    
+        logR_m = np.log2(r_init)
+        logR_std = 1
+        logR_m_record.append(logR_m)
+    
+        num_p = 1000
+        num_w = 100
+        maxiter = 2
+        delta_LL_tol = 0.1
+        job_unit = 20
+        if n_cores is None:
+            n_cores = min(50, int(mp.cpu_count()*0.8))
+        
+        parallel = True
+        if ndoublets <= job_unit:
+            parallel = False
+    
+        if parallel:
+            # number of samples for each parallel job in E-step
+            num_jobs = ndoublets // job_unit
+            jobs_sidx = [i*job_unit for i in range(num_jobs)]
+            jobs_sidx.append(ndoublets)
+    
+        keeptimes = []
+        keeptimes_tol = 5
+    
+        LL = -1e308
+        iteration = 0
+        LL_record.append(LL)
+    
+        fp_dll0 = dirichlet.logpdf(alpha0/sum(alpha0), alpha0) 
+        fp_dll1 = dirichlet.logpdf(alpha1/sum(alpha1), alpha1) 
+    
+        while( (len(keeptimes) <  keeptimes_tol) and (iteration < maxiter)):
+            # Termination creteria: 
+            # ------------------------- (1). iteration times exceed the maximum.
+            # ------------------------- (2). the delta_LL is less than the threshold k times in a row.   
+    
+            # print('iteration',iteration)
+            log.write('iteration '+str(iteration)+'\n')
+    
+            tp0 = time.time()
+            if parallel:
+    
+                pool = mp.Pool(n_cores)  
+                result_compact = [pool.apply_async( job_Estep, (Y_new, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, jobs_sidx[i], jobs_sidx[i+1]) ) for i in range(num_jobs)]
+                pool.close()
+                pool.join()
+    
+                results = [term.get() for term in result_compact] 
+                ll_mat = np.concatenate([term[0] for term in results])  # num_doublet x num_p
+                w_mat = np.concatenate([term[1] for term in results])   # num_doublet x num_p
+    
+            else:
+    
+                ll_mat, w_mat = job_Estep(Y_new, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, 0, len(Y_new))
+    
+            log.write('\tE step time:'+str(time.time()-tp0)+'\n')
+    
+            ### M-step:
+            best_w_idx = [np.argmax(term) for term in ll_mat]
+            ll_doublet = [ll_mat[idx][val] for idx,val in enumerate(best_w_idx)]
+    
+            delta_LL = np.sum(ll_doublet) - LL
+    
+            w_best = [w_mat[idx][val] for idx,val in enumerate(best_w_idx)]
+            r_best = [(1-w)/w for w in w_best]
+    
+            if delta_LL > delta_LL_tol:
+    
+                LL = np.sum(ll_doublet)
+                logR_m = np.mean(np.log2(r_best))
+                logR_std = np.std(np.log2(r_best))
+    
+                logR_m_record.append(logR_m)
+                LL_record.append(LL)
+                r_track.append(r_best)
+
+                log.write('\testi R '+str(2**logR_m)+'\n\tdelta LL '+str(delta_LL)+'\n')
+    
+            keeptimes.append(delta_LL < delta_LL_tol)
+            if not np.all(keeptimes):
+                keeptimes = []    
+    
+            iteration += 1
+    
+        tconsuming = time.time() - t0
+    
+        est_R = 2**logR_m_record[-1]#2**np.median(logR_m_record[2:]) if len(logR_m_record) > 2 else 2**logR_m_record[-1]
+
+        log.write('final R '+str(est_R)+'\n')
+        log.write('time '+str(tconsuming)+'\n\n\n')
+
+        log.close()
+    
+        ## record R_estimation and LL each update
+        R_LL_df = pd.DataFrame({'R':2**np.array(logR_m_record),'LL':LL_record})
+        R_LL_df.to_csv(os.path.join(output,'.'.join(['RandLL',name,str(repeat),'csv'])))
+    
+        ## record r estimated for each doublet per update
+        r_track_df = pd.DataFrame(np.array(r_track).transpose(),columns=range(len(r_track)))
+        r_track_df.to_csv(os.path.join(output,'.'.join(['Rtrack',name,str(repeat),'csv'])))
+     
+
+
+def job_Estep(Y_test, Alpha_mat, fp_dll0, fp_dll1, logR_m, logR_std,  num_p, num_w, start_sidx, end_sidx):
+    
+    np.random.seed()
+    
+    sidx_range = range(start_sidx, end_sidx)
+    alpha0, alpha1 = Alpha_mat
+    
+    ybatch_ll_list = []
+    ybatch_w_list = []
+  
+    ### E-setp:
+    for i in sidx_range:
+        
+        y = Y_test[i]
+        
+        logR_sampling = np.random.normal(logR_m, logR_std, num_w)
+        W = 1/(2**logR_sampling+1)
+    
+        logR_ll = norm.logpdf(logR_sampling, logR_m, logR_std) 
+        
+        d_p0_sampling  = np.random.dirichlet(alpha0, num_p)
+        d_p0_sampling = get_P_valid(d_p0_sampling)
+        diri_ll_0 = [dirichlet.logpdf(p, alpha0)  - fp_dll0 for p in d_p0_sampling]
+        
+        d_p1_sampling  = np.random.dirichlet(alpha1, num_p)
+        d_p1_sampling = get_P_valid(d_p1_sampling)
+        diri_ll_1 = [dirichlet.logpdf(p, alpha1) - fp_dll1 for p in d_p1_sampling]
+                
+        y_ll = []
+        for w_idx in range(len(W)):
+            
+            w = W[w_idx]
+            p_wsum = d_p0_sampling * w + d_p1_sampling * (1-w)
+ 
+            sum_term = p_wsum.sum(1)
+            p_wsum = p_wsum/sum_term.reshape(-1,1)       
+            
+            mult_ll = (np.log(p_wsum)*y).sum(1)
+
+            pvec_y_ll = np.array(diri_ll_0)+np.array(diri_ll_1)+logR_ll[w_idx]+np.array(mult_ll) 
+            #pvel_y_ll_midx = np.argmax(pvec_y_ll)
+    
+            y_ll.append(np.max(pvec_y_ll))
+
+        ybatch_ll_list.append(y_ll)
+        ybatch_w_list.append(W) 
+        
+  
+    ll_mat = np.array(ybatch_ll_list) # ndoublet x num_w
+    w_mat = np.array(ybatch_w_list)   # ndoublet x num_w
+    
+    return ll_mat, w_mat
+
+
+
+def get_P_valid(P):
+    
+    P[P==0] = 1e-10 
+
+    return P

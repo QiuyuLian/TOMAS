@@ -9,31 +9,19 @@ Created on Tue Apr  6 15:04:27 2021
 import numpy as np
 import scipy
 from scipy.special import gammaln
-import time
+#import time
 #import pickle
 import traceback
 import pandas as pd
-import os, sys
+#import os, sys
 import pyDIMM
 from scipy import stats
 import multiprocessing as mp
 import anndata
 
-class HiddenPrints:
-    # Hide prints from pyDIMM in C
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
+#%% DMN optimization 
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-
-
-
-#%% DMN optimization with python 
-
-def dmn(adata, groupby, groups, maxiter=1000, subset=None, verbose=2, verbose_interval=10):
+def dmn(adata, groupby, groups='all', tol=1e-3, maxiter=1000, subset=None, verbose=2, verbose_interval=10):
     '''
     Fit Dirichlet-Multinomial distribution with UMI counts of homo-droplet populations.
 
@@ -44,16 +32,20 @@ def dmn(adata, groupby, groups, maxiter=1000, subset=None, verbose=2, verbose_in
         Rows correspond to droplets and columns to genes.
     groupby : str
         The key of the droplet categories stored in adata.obs. 
-    groups : list of strings
-        Droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'] annotated in adata.obs[groupby] to which DMN model shoudl be fitted with.
-    output : path
-        Path to save the results.
-    c_version : bool, optional
-        If or not to use DMN fitting in C language. The default is True.
+    groups : list of strings, optional
+        Droplet categories to which DMN model shoudl be fitted with. It should be eithor 'all' or a list of cell type annotations specified in adata.obs[groupby].
+        The default is 'all'.
+    tol : float, optional
+        The convergence threshold. The iteration will stop when the likelihood gain is below this threshold. The default is 1e-3.
     maxiter : int, optional
-        The maximal number of iteration. The default is 2000.
+        The maximal number of iteration. The default is 1000.
     subset : int, optional
-        Whether to downsample droplets to fit DMN. If so, how many droplets should be sampled. The default is None.
+        Number of downsampled droplets to fit DMN. It is only recommended when you have excessive droplet numbers for homotypic droplet populations. The default is None.
+    verbose : int, optional
+        Enable verbose output. If 1 then it prints the current initialization and each iteration step. If greater than 1 then it prints also the log probability and time needed for each step.
+        The default is 2.
+    verbose_interval : int, optional
+        Number of iteration done before the next print. The default is 10.
 
     Returns
     -------
@@ -62,9 +54,9 @@ def dmn(adata, groupby, groups, maxiter=1000, subset=None, verbose=2, verbose_in
 
     '''
     
-    # if not os.path.exists(output):
-    #     os.makedirs(output)
-    
+    if groups=='all':
+        groups = [d for d in adata.obs[groupby].unique() if len(d.split('_'))==1]
+        
     counts_list = []
     vidx_list = []
     for group in groups:
@@ -90,7 +82,7 @@ def dmn(adata, groupby, groups, maxiter=1000, subset=None, verbose=2, verbose_in
     n_cores = min(len(groups), int(mp.cpu_count()*0.8))
     
     pool = mp.Pool(n_cores)  
-    result_compact = [pool.apply_async( _fitdmn, (counts_list[i], groups[i], maxiter, verbose, verbose_interval) ) for i in range(len(groups))]
+    result_compact = [pool.apply_async( _fitdmn, (counts_list[i], groups[i], tol,maxiter, verbose, verbose_interval) ) for i in range(len(groups))]
     pool.close()
     pool.join()
     
@@ -100,17 +92,22 @@ def dmn(adata, groupby, groups, maxiter=1000, subset=None, verbose=2, verbose_in
     alpha_df = pd.DataFrame(np.ones([adata.n_vars,len(groups)])*1e-12, index=adata.var_names, columns=groups)
     for gidx,gval in enumerate(groups):
         alpha_df.loc[vidx_list[gidx],gval] = alpha_out[gidx]
-        
-    adata.varm['para_diri'] = alpha_df
+    
+    if 'para_diri' in adata.varm:
+        for g in groups:
+            adata.varm['para_diri'][g] = alpha_df[g]
+    else:
+        adata.varm['para_diri'] = alpha_df
     
     
 
 
-def _fitdmn(counts,group,maxiter,verbose,verbose_interval):
+def _fitdmn(counts,group,tol,maxiter,verbose,verbose_interval):
     
     dmm = pyDIMM.DirichletMultinomialMixture(n_components=1, 
                                              max_iter=maxiter, 
                                              n_init=1, 
+                                             tol=tol,
                                              verbose=verbose,
                                              verbose_interval=verbose_interval).fit(counts)
     print(group+' is done!')
@@ -119,7 +116,77 @@ def _fitdmn(counts,group,maxiter,verbose,verbose_interval):
 
 
 
+
+
+#%% logNormal distribution optimization
+
+def rm_outliers(x):
+    iqr = stats.iqr(x)
+    outlier_lb = np.quantile(x,0.25)-1.5*iqr
+    outlier_ub = np.quantile(x,0.75)+1.5*iqr
+    x_shrinkage = x[x > outlier_lb]
+    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
+    return x_shrinkage#,(outlier_lb,outlier_ub)
+
+
+def logN_para(adata,logUMIby,groupby,groups='all',inplace=True):
+    '''
+    Fit logNormal distributions with UMI amounts of homo-droplet populations.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
+        Rows correspond to droplets and columns to genes.
+    logUMIby : str
+        The key of total UMIs in log10 stored in adata.obs.
+    groupby : str
+        The key of the droplet categories stored in adata.obs. 
+    groups : list of strings, optional
+        Droplet categories to fit the total UMIs wtih logNormal distribution. It should be eithor 'all' or a list of cell type annotations specified in adata.obs[groupby].
+        The default is 'all'.
+    inplace : bool, optional
+        If or not to store fitted parameters into adata. The default is True.
+
+    Returns
+    -------
+    para : list
+        Retuen mean and std of fitted logNormal distributions if inplace is False.
+    '''
+    if groups=='all':
+        groups = adata.obs[groupby].unique()
+    
+    para = []
+    for g in groups:
+        m,s = stats.norm.fit(rm_outliers(adata.obs[logUMIby][adata.obs[groupby]==g]))
+        para.append([m,s])
+
+    if inplace:
+        adata.uns['logUMI_para'] = pd.DataFrame(np.array(para),
+                                                       index=groups,
+                                                       columns=['mean','std'])
+    else:
+        return para
+
+
+
+
+
+
+
 '''
+
+class HiddenPrints:
+    # Hide prints from pyDIMM in C
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
+
+
 def _job_fitdmn(counts, group,c_version,maxiter,output):
 
     print('Start fitting '+group+' droplets. This may take a long time. Please wait...\n')
@@ -147,9 +214,8 @@ def _job_fitdmn(counts, group,c_version,maxiter,output):
         log.close()
     
     return alpha_vec
+
 '''
-
-
 
 def initialize_alpha(Y):
 
@@ -297,56 +363,5 @@ def calculate_LL(alpha, Y):
         LL_tmp[i] = num1[i] + num2[i] 
     
     return LL_tmp
-
-
-
-#%% logNormal distribution optimization
-
-def rm_outliers(x):
-    iqr = stats.iqr(x)
-    outlier_lb = np.quantile(x,0.25)-1.5*iqr
-    outlier_ub = np.quantile(x,0.75)+1.5*iqr
-    x_shrinkage = x[x > outlier_lb]
-    x_shrinkage = x_shrinkage[x_shrinkage<outlier_ub]
-    return x_shrinkage#,(outlier_lb,outlier_ub)
-
-
-def logN_para(adata,logUMIby,groupby,groups=None,inplace=True):
-    '''
-    Fit logNormal distributions with UMI amounts of homo-droplet populations.
-
-    Parameters
-    ----------
-    adata : AnnData
-        The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
-        Rows correspond to droplets and columns to genes.
-    logUMIby : str
-        The key of total UMIs in log10 stored in adata.obs.
-    groupby : str
-        The key of the droplet categories stored in adata.obs. 
-    groups : list of strings
-        Subset of droplet categories, e.g. ['Homo-ct1', 'Homo-ct2'], to which DMN model shoudl be fitted with.
-    inplace : bool, optional
-        If or not to store fitted parameters into adata. The default is True.
-
-    Returns
-    -------
-    para : list
-        Retuen mean and std of fitted logNormal distributions if inplace is False.
-    '''
-    if groups is None:
-        groups = adata.obs[groupby].unique()
-    
-    para = []
-    for g in groups:
-        m,s = stats.norm.fit(adata.obs[logUMIby][adata.obs[groupby]==g])
-        para.append([m,s])
-
-    if inplace:
-        adata.uns['logUMI_para'] = pd.DataFrame(np.array(para),
-                                                       index=groups,
-                                                       columns=['mean','std'])
-    else:
-        return para
 
 
