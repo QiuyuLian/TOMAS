@@ -129,7 +129,7 @@ def rm_outliers(x):
     return x_shrinkage#,(outlier_lb,outlier_ub)
 
 
-def logN_para(adata,logUMIby,groupby,groups='all',inplace=True):
+def logNormal(adata,groupby,groups='all',inplace=True):
     '''
     Fit logNormal distributions with UMI amounts of homo-droplet populations.
 
@@ -138,8 +138,6 @@ def logN_para(adata,logUMIby,groupby,groups='all',inplace=True):
     adata : AnnData
         The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
         Rows correspond to droplets and columns to genes.
-    logUMIby : str
-        The key of total UMIs in log10 stored in adata.obs.
     groupby : str
         The key of the droplet categories stored in adata.obs. 
     groups : list of strings, optional
@@ -156,13 +154,19 @@ def logN_para(adata,logUMIby,groupby,groups='all',inplace=True):
     if groups=='all':
         groups = adata.obs[groupby].unique()
     
+    if 'total_UMIs' not in adata.obs:
+        adata.obs['total_UMIs'] = np.ravel(adata.X.sum(1))
+    
+    if 'log2_total_UMIs' not in adata.obs:
+        adata.obs['log2_total_UMIs'] = np.log2(adata.obs['total_UMIs'])        
+
     para = []
     for g in groups:
-        m,s = stats.norm.fit(rm_outliers(adata.obs[logUMIby][adata.obs[groupby]==g]))
+        m,s = stats.norm.fit(rm_outliers(adata.obs['log2_total_UMIs'][adata.obs[groupby]==g]))
         para.append([m,s])
 
     if inplace:
-        adata.uns['logUMI_para'] = pd.DataFrame(np.array(para),
+        adata.uns['para_logUMI'] = pd.DataFrame(np.array(para),
                                                        index=groups,
                                                        columns=['mean','std'])
     else:

@@ -174,7 +174,7 @@ sns.set(style="ticks")
 def get_bins(x,bw=0.05):
     return np.arange(min(x),max(x)+bw,bw)
 
-def UMI_hist(adata,x_hist='log10UMIs',groupby=None, groups='all',return_fig=None,**fig_para):
+def UMI_hist(adata,groupby=None, groups='all',return_fig=None,**fig_para):
     '''
     Visualize the log-UMI-amount distribution.
 
@@ -183,8 +183,6 @@ def UMI_hist(adata,x_hist='log10UMIs',groupby=None, groups='all',return_fig=None
     adata : AnnData
         The (annotated) UMI count matrix of shape `n_obs` × `n_vars`.
         Rows correspond to droplets and columns to genes.
-    x_hist : str, optional
-        The key of logUMI values stroed in adata.obs. The default is 'log10UMIs'.
     groupby : str
         The key of the droplet categories stored in adata.obs. 
     groups : list of strings, optional
@@ -206,19 +204,17 @@ def UMI_hist(adata,x_hist='log10UMIs',groupby=None, groups='all',return_fig=None
 
     '''
     
+    x_hist='log2_total_UMIs'
+    if 'log2_total_UMIs' not in adata.obs:
+        adata.obs['log2_total_UMIs'] = np.log2(np.ravel(adata.X.sum(1)))
+    
     obsdata = adata.obs
     
-    bw = fig_para.get('bw',0.05)
+    bw = fig_para.get('bw',0.2)
     fix_bins = fig_para.get('fix_bins',None)
     fix_yticks = fig_para.get('fix_yticks',None)
     palette = fig_para.get('palette','Set2')
 
-    xticks = np.array([3,np.log10(2000),np.log10(4000),np.log10(6000),np.log10(8000),4,\
-              np.log10(20000),np.log10(40000),np.log10(60000),np.log10(80000),5])
-    xannos = np.array(['1k','2k','4k','6k','8k','10k','20k','40k','60k','80k','100k'])
-
-    xidx = [i for i in range(len(xticks)) if xticks[i] > obsdata[x_hist].min() and xticks[i] < obsdata[x_hist].max()]
-    
     fig = plt.figure(figsize=(6,4),dpi=64)
     ax=plt.subplot()
     
@@ -241,19 +237,20 @@ def UMI_hist(adata,x_hist='log10UMIs',groupby=None, groups='all',return_fig=None
         for i,g in enumerate(groups):
             plt.hist(v_list[i],bins,label=g,alpha=0.6, color=col_list[i])
 
-        plt.legend(loc='upper right')
+        plt.legend(loc='upper right',fontsize=12)
         
     # Hide the right and top spines
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    plt.xlabel('Total cell UMI count',fontsize=12)
-    plt.ylabel('Frequency',fontsize=12)
+    plt.xlabel('Log2 Total UMI counts',fontsize=15)
+    plt.ylabel('Frequency',fontsize=15)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
     if fix_yticks is not None:
-        plt.yticks(fix_yticks,fix_yticks)
-    plt.xticks(xticks[xidx], xannos[xidx])
+        plt.yticks(fix_yticks,fix_yticks,fontsize=12)
+    #plt.xticks(xticks[xidx], xannos[xidx])
     if return_fig is True:
         return fig
-
 
 
 def corrected_UMI_hist(adata,groupby,groups,reference,logUMIby,ratios,return_fig=None):
@@ -325,7 +322,7 @@ def get_corrected_logUMI(adata, groupby, groups, reference,logUMIby, ratios):
     ori_data[groupby] = ori_data[groupby].astype(str)
     corr_data = copy.deepcopy(ori_data)
     for i,v in enumerate(groups):
-        logratio_obs = adata.uns['logUMI_para'].loc[v,'mean']-adata.uns['logUMI_para'].loc[reference,'mean']
+        logratio_obs = adata.uns['para_logUMI'].loc[v,'mean']-adata.uns['para_logUMI'].loc[reference,'mean']
         delta_logUMI = np.log10(ratios[i])-logratio_obs
         corr_data.loc[ori_data[groupby]==v,logUMIby] = ori_data.loc[ori_data[groupby]==v,logUMIby]+delta_logUMI#np.log10(ratio[i])
         corr_data.loc[ori_data[groupby]==v,groupby] = v+'_corrected' 

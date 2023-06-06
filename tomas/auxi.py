@@ -21,6 +21,30 @@ from scipy import stats
 
 
 
+import gzip
+import shutil
+from scipy import sparse, io
+
+def write_h5ad_to_mtx(adata, droplets_to_write, features_to_write, outfolder):
+
+    adata = adata[droplets_to_write, features_to_write].copy()
+    sparse_matrix = sparse.csr_matrix(adata.X.transpose()) 
+
+    os.makedirs(outfolder, exist_ok=True)
+    io.mmwrite(os.path.join(outfolder,'matrix.mtx'),sparse_matrix)
+    with gzip.open(os.path.join(outfolder,'barcodes.tsv.gz'), 'wb') as barcode_file:
+        for barcode in droplets_to_write:
+            barcode_file.write('{}\n'.format(barcode).encode())
+    with gzip.open(os.path.join(outfolder,'features.tsv.gz'), 'wb') as feature_file:
+        for feature in features_to_write:
+            feature_file.write('{}\n'.format(feature).encode())
+    with open(os.path.join(outfolder,'matrix.mtx'),'rb') as mtx_in:
+        with gzip.open(os.path.join(outfolder,'matrix.mtx') + '.gz','wb') as mtx_gz:
+            shutil.copyfileobj(mtx_in, mtx_gz)
+    os.remove(os.path.join(outfolder,'matrix.mtx')) 
+    
+
+
 
 def annote_clusters(adata_psgl, ct_mapper, groupby='leiden',anno_group=None):
     '''
@@ -261,7 +285,7 @@ def KL_Dir_miginal(alpha1, alpha2, gidx):
 
 import copy
 
-def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
+def correctUMI(adata, groupby, method='upsampling', logUMIby=None):
     '''
     Correct UMI to meet the estimated total-mRNA-ratio.
 
@@ -272,10 +296,8 @@ def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
         Rows correspond to droplets and columns to genes.
     groupby : str
         The key of the droplet categories stored in adata.obs. 
-    ratios : dict
-        DESCRIPTION.
     logUMIby : str, optional
-        The key of total UMIs in log10 stored in adata.obs. The default is None.
+        The key of total UMIs in log2 stored in adata.obs. The default is None.
         
     Returns
     -------
@@ -284,25 +306,31 @@ def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
 
     '''    
 
-    groups = list(ratios.keys())
-    r_vals = list(ratios.values())
-    resortidx = np.argsort(r_vals)
     
-    groups = [groups[v] for v in resortidx]
-    r_vals = [r_vals[v] for v in resortidx]
+    #groups = list(ratios.keys())
+    #r_vals = list(ratios.values()) 
+    #resortidx = np.argsort(r_vals)
+    
+    #groups = [groups[v] for v in resortidx]
+    #r_vals = [r_vals[v] for v in resortidx]
+
+    groups = adata.uns['ratio_serial'].index.values.tolist()
+    r_vals = np.ravel(adata.uns['ratio_serial'].values)
 
     alpha_df = adata.varm['para_diri']
 
     if logUMIby is None:
+        if 'log2_total_UMIs' not in adata.obs:
+            adata.obs['total_UMIs'] = np.ravel(adata.X.sum(1))
+            adata.obs['log2_total_UMIs'] = np.log2(adata.obs['total_UMIs']) 
+            
+        logUMIby = 'log2_total_UMIs'
 
-        adata.obs['total_UMIs'] = adata.X.sum(1)[:,0]
-        adata.obs['log10_totUMIs'] = np.log10(adata.obs['total_UMIs'])
-        logUMIby = 'log10_totUMIs'
         
     #logN_para = [norm.fit(adata.obs[logUMIby][adata.obs[groupby]==v]) for v in groups]
     #mu_list = [x[0] for x in logN_para]
     #std_list = [x[1] for x in logN_para]
-    mu_list = list(adata.uns['logUMI_para'].loc[groups,'mean'])
+    mu_list = list(adata.uns['para_logUMI'].loc[groups,'mean'])
     
     mat_rc = copy.deepcopy(adata.X.toarray())
     
@@ -310,7 +338,7 @@ def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
         
         print('Correct UMIs of population '+groups[i+1])
 
-        UMI_delta = 10**(mu_list[0] + np.log10(r_vals[i+1]) - mu_list[i+1])-1
+        UMI_delta = 2**(mu_list[0] + np.log2(r_vals[i+1]) - mu_list[i+1])-1
         alpha = alpha_df[groups[i+1]]
         X_mat = copy.deepcopy(mat_rc[adata.obs[groupby]==groups[i+1],:])
         
@@ -321,9 +349,20 @@ def correctUMI(adata, groupby, ratios, method='upsampling', logUMIby=None):
     #adata_rc.obs = adata.obs
     adata_rc.var_names = adata.var_names.values.tolist()
     adata_rc.obs_names = adata.obs_names.values.tolist()
+    
+    for col in adata.obs:
+        adata_rc.obs[col] = adata.obs[col].values
+    adata_rc.varm['para_diri'] = adata.varm['para_diri']
+    adata_rc.obs['rc_total_UMIs'] = np.ravel(adata_rc.X.sum(1))
+    adata_rc.obs['log2_total_UMIs'] = np.log2(adata_rc.obs['rc_total_UMIs'])
+    
+    for term in adata.uns:
+        adata_rc.uns[term] = adata.uns[term]
+        
     adata_rc.uns['corrected'] = 'data'
 
     return adata_rc
+
 
 
 
@@ -372,25 +411,25 @@ def correct_para(adata_sgl, groupby, achor_group=None, adjust_group=None):
     
     mean_logR, std_logR = norm.fit(rm_outliers(np.log10(adata_sgl.uns['Rest_perdbl'])))
     
-    adata_sgl.uns['raw_logUMI_para'] = copy.deepcopy(adata_sgl.uns['logUMI_para'])
+    adata_sgl.uns['raw_para_logUMI'] = copy.deepcopy(adata_sgl.uns['para_logUMI'])
     adata_sgl.uns['corrected'] = 'para'
     
     if achor_group is None or adjust_group is None:
         groups = list(adata_sgl.obs[groupby].unique())
-        adjust_group,achor_group = (np.argsort(adata_sgl.uns['logUMI_para'].loc[groups,'mean'])).index
+        adjust_group,achor_group = (np.argsort(adata_sgl.uns['para_logUMI'].loc[groups,'mean'])).index
         # adjust the parameter of group with smaller mean by default
         
-    achor_mean = adata_sgl.uns['logUMI_para'].loc[achor_group,'mean']
-    adjust_mean = adata_sgl.uns['logUMI_para'].loc[adjust_group,'mean']
+    achor_mean = adata_sgl.uns['para_logUMI'].loc[achor_group,'mean']
+    adjust_mean = adata_sgl.uns['para_logUMI'].loc[adjust_group,'mean']
     
-    adata_sgl.uns['shift_ratio'] = 10**(mean_logR - np.abs(achor_mean-adjust_mean))
+    adata_sgl.uns['shift_ratio'] = 2**(mean_logR - np.abs(achor_mean-adjust_mean))
     
     if achor_mean > adjust_mean:
         mean_corrected = achor_mean - mean_logR
     else:
         mean_corrected = achor_mean + std_logR
         
-    adata_sgl.uns['logUMI_para'].loc[adjust_group,'mean'] = mean_corrected
+    adata_sgl.uns['para_logUMI'].loc[adjust_group,'mean'] = mean_corrected
 
     
 

@@ -83,11 +83,12 @@ def ratios_bc(adata_mg, dblgroup, max_iter=100, tol=1e-3, n_logR=100, n_p=1000, 
     
         w_prior = initialize_w(Y, alpha0, alpha1)
         log2R_m = np.log2((1-w_prior)/w_prior)
-        #log2R_std_prior = adata_mg.uns['logUMI_para'].loc[dblgroup.split('_'),'std'].sum()
+        #log2R_std_prior = adata_mg.uns['para_logUMI'].loc[dblgroup.split('_'),'std'].sum()
         #log2R_std = copy.deepcopy(log2R_std_prior)
-        log2R_std = adata_mg.uns['logUMI_para'].loc[dblgroup.split('_'),'std'].sum()
-        log2R_std_prior = np.max([1,log2R_std])
-
+        log2R_std = np.sqrt(np.sum(adata_mg.uns['para_logUMI'].loc[dblgroup.split('_'),'std']**2))
+        log2R_std_prior = np.max([adata_mg.uns['para_logUMI'].loc[dblgroup,'std'], log2R_std])
+        log2R_std = copy.deepcopy(log2R_std_prior)
+        
         p0_best = np.array([alpha0/alpha0.sum()]*n)
         p1_best = np.array([alpha1/alpha1.sum()]*n)
         #w_best = np.array([w_prior]*n)
@@ -99,7 +100,6 @@ def ratios_bc(adata_mg, dblgroup, max_iter=100, tol=1e-3, n_logR=100, n_p=1000, 
         
         ll_best = np.array([[dirichlet.logpdf(alpha0/alpha0.sum(),alpha0)]*n, 
                             [dirichlet.logpdf(alpha1/alpha1.sum(),alpha1)]*n,
-                            #[norm.logpdf(log2R_m,log2R_m,log2R_std)]*n,
                             list(norm.logpdf(logR_sampling,log2R_m,log2R_std)),
                             [multinomial.logpmf(Y[j],num_trials[j],p_dbl_best[j]) for j in range(n)]])
         
@@ -114,7 +114,6 @@ def ratios_bc(adata_mg, dblgroup, max_iter=100, tol=1e-3, n_logR=100, n_p=1000, 
         adata_mg.uns['ratio'] = ratio_dic
             
             
-    #log2R_std_prior = np.max([1,log2R_std_prior])
     ll_tot_best = ll_best.sum()
     delta_ll = np.inf
     print('Initialized.')
@@ -127,8 +126,10 @@ def ratios_bc(adata_mg, dblgroup, max_iter=100, tol=1e-3, n_logR=100, n_p=1000, 
 
         NoUpdate = 0
         ##### update w, fix p
-        logR_sampling = np.random.normal(log2R_m, log2R_std_prior, n_logR)
-        logR_ll = norm.logpdf(logR_sampling, log2R_m, log2R_std_prior) 
+        # logR_sampling = np.random.normal(log2R_m, log2R_std_prior, n_logR)
+        # logR_ll = norm.logpdf(logR_sampling, log2R_m, log2R_std_prior) 
+        logR_sampling = np.random.normal(log2R_m, log2R_std, n_logR)
+        logR_ll = norm.logpdf(logR_sampling, log2R_m, log2R_std) 
         W = 1/(2**logR_sampling+1)
 
         p_dbl_fixp = np.array([p0_best*w + p1_best*(1-w) for w in W])
@@ -148,8 +149,8 @@ def ratios_bc(adata_mg, dblgroup, max_iter=100, tol=1e-3, n_logR=100, n_p=1000, 
             w_best[replace] = w_best_tmp[replace]
             log2R_m,log2R_std = norm.fit(rm_outliers(np.log2((1-w_best)/w_best)))
             #log2R_m,log2R_std = norm.fit(np.log2((1-w_best)/w_best))
-            if log2R_std < 0.01: #
-                log2R_std = np.max([log2R_std,log2R_std_prior])
+            #if log2R_std < 0.01: #
+            log2R_std = np.max([log2R_std,log2R_std_prior])
 
             ll_best[2,replace] = logR_ll_max[replace]
             ll_best[3,replace] = mult_ll_max[replace]
@@ -240,22 +241,22 @@ def func(x, a):
     return y
 
 
-def initialize_w(Y, alpha1, alpha2):
+def initialize_w(Y, alpha1, alpha2, method='kde'):
     
     p1 = alpha1/sum(alpha1)
     p2 = alpha2/sum(alpha2)
     gsum_mix = Y.sum(0)
     pmix = gsum_mix/sum(gsum_mix)
-    # method=='ols'
-    n = Y.shape[0]
-    w_ = optimize.curve_fit(func, 
-                            xdata = np.ravel(np.array([p1]*n)-np.array([p2]*n)), 
-                            ydata = np.ravel(pmix - np.array([p2]*n)))
-
-    w = w_[0][0]
+    if method=='ols':
+        n = Y.shape[0]
+        w_ = optimize.curve_fit(func, 
+                                xdata = np.ravel(np.array([p1]*n)-np.array([p2]*n)), 
+                                ydata = np.ravel(pmix - np.array([p2]*n)))
+        w = w_[0][0]
+        if w >= 1 or w <= 0:
+            method=='kde'
     
-    if w >= 1 or w <= 0:
-    # method=='kde'
+    if method=='kde':
         idx_in = [i for i in range(len(p1)) if pmix[i] > min(p1[i],p2[i]) and pmix[i] < max(p1[i], p2[i])]
         
         w_tmp = [(pmix[i]-p2[i])/(p1[i]-p2[i]) for i in idx_in if p1[i] - p2[i] != 0]
@@ -671,6 +672,9 @@ def get_mg(raw_Alpha1, raw_Alpha2, merging_threshold=1, skip_threshold=2, alphaM
 from matplotlib import pyplot as plt
 import seaborn as sns
 import itertools
+import matplotlib.image as mpimg
+sns.set_style("ticks")
+
 
 def heteroDbl(adata, d_groupby, ct_groupby, de_sorted=None,dbl_groupby = 'heteroDbl',vis=False):
     '''
@@ -714,7 +718,8 @@ def heteroDbl(adata, d_groupby, ct_groupby, de_sorted=None,dbl_groupby = 'hetero
 
 
 
-def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=None, mg_gnum=[10,10], threshold = None, threshold_x=None,threshold_y=None,vis=True, log=True, return_fig=False):
+
+def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=None, mg_gnum=[10,10], threshold = None, threshold_x=None,threshold_y=None,vis=True, log=True, return_fig=False, dpi=80):
     '''
     Identification and refinement of a certain type of heterotypic doublets specified by "dbl".
 
@@ -758,6 +763,10 @@ def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=Non
         Idnetified heterotypic doublets composed by input cell type pair.
 
     '''
+    
+    if 'dblPred_'+dbl in adata.obs:
+        del adata.obs['dblPred_'+dbl]
+    
     ct_pair = dbl.split('_')
     if g2meta is not None:
         g2meta_x,g2meta_y = g2meta
@@ -817,7 +826,9 @@ def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=Non
     
 
     dbl_onhit = [d for d in dbl_sub.index if dbl_sub.loc[d,'x'] > mgx_threshold and dbl_sub.loc[d,'y'] > mgy_threshold]
-
+    adata.obs['dblPred_'+dbl] = 0
+    adata.obs.loc[dbl_onhit,'dblPred_'+dbl] = 1
+    
     if vis:
         
         dbl_sub['pred'] = ['others']*dbl_sub.shape[0]
@@ -825,38 +836,195 @@ def heteroDbl_bc(adata, dbl, d_groupby, ct_groupby, g2meta = None, de_sorted=Non
         dbl_sub['pred'] = pd.Categorical(dbl_sub['pred'],categories=['_'.join(ct_pair), 'others'])
 
 
-        fig = plt.figure(figsize=(11,4),dpi=64)
-        sns.set_style('white')
-        ax = plt.subplot(1,2,1)
-        sns.scatterplot(data=sgl_sub, x='x',y='y',hue='celltype_pair',palette=['blue','green','gray'])
-        plt.plot([0,max(sgl_sub['x'])],[mgy_threshold, mgy_threshold],color='blue')
-        plt.plot([mgx_threshold, mgx_threshold],[0,max(sgl_sub['y'])],color='green')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.,fontsize=15)
-        plt.xlabel('MetaDEG of '+ct_pair[0],fontsize=15)
-        plt.ylabel('MetaDEG of '+ct_pair[1],fontsize=15)
-        plt.title('Identified cell types \nfrom putative singlets',fontsize=18)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        
-        ax = plt.subplot(1,2,2)
-        sns.scatterplot(data=dbl_sub, x='x',y='y',hue='pred',palette=['red','gray'])
-        plt.plot([0,max(dbl_sub['x'])],[mgy_threshold, mgy_threshold],color='blue')
-        plt.plot([mgx_threshold, mgx_threshold],[0,max(dbl_sub['y'])],color='green')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.,fontsize=15)
-        plt.xlabel('MetaDEG of '+ct_pair[0],fontsize=15)
-        plt.ylabel('MetaDEG of '+ct_pair[1],fontsize=15)
-        plt.title('Identified hetero-dbls \nfrom putative doublets',fontsize=18)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        
+        grid1 = sns.JointGrid(data=sgl_sub, x="x", y="y")
+        g1 = grid1.plot_joint(sns.scatterplot, hue='celltype_pair', data=sgl_sub, palette=['blue','green','gray'])
+        sns.kdeplot(x=sgl_sub['x'], ax=g1.ax_marg_x, legend=False)
+        sns.kdeplot(y=sgl_sub['y'], ax=g1.ax_marg_y, legend=False)
+        g1.ax_joint.axhline(y=mgy_threshold,c='blue')
+        g1.ax_joint.axvline(x=mgx_threshold,c='green')
+        g1.set_axis_labels('MetaDEG of A (putative singlets)', 'MetaDEG of B (putative singlets)', fontsize=18)
+
+        grid2 = sns.JointGrid(data=dbl_sub, x="x", y="y")
+        g2 = grid2.plot_joint(sns.scatterplot, hue='pred', data=dbl_sub, palette=['red','gray'])
+        sns.kdeplot(x=dbl_sub['x'], ax=g2.ax_marg_x, legend=False)
+        sns.kdeplot(y=dbl_sub['y'], ax=g2.ax_marg_y, legend=False)
+        g2.ax_joint.axhline(y=mgy_threshold,c='blue')
+        g2.ax_joint.axvline(x=mgx_threshold,c='green')
+        g2.set_axis_labels('MetaDEG of A (putative doublets)', 'MetaDEG of B (putative doublets)', fontsize=18)
+
+        ############### save plots in memory temporally
+        g1.savefig('g1.png')
+        plt.close(g1.fig)
+
+        g2.savefig('g2.png')
+        plt.close(g2.fig)
+
+        ############### create subplots from temporay memory
+        fig, axarr = plt.subplots(1, 2, figsize=(10, 5),dpi=dpi)
+        axarr[0].imshow(mpimg.imread('g1.png'))
+        axarr[1].imshow(mpimg.imread('g2.png'))
+
+        # turn off x and y axis
+        [ax.set_axis_off() for ax in axarr.ravel()]
+
         plt.tight_layout()
         plt.show()
         
+        os.remove('g1.png')
+        os.remove('g2.png')
+        
+        
         if return_fig:
-            return dbl_onhit, fig
+            #return dbl_onhit, fig
+            return fig
 
-    return dbl_onhit
 
+
+
+
+
+def heterodbl_summary(adata,ct_groupby):
+    
+    dblpred_df = adata.obs[[c for c in adata.obs.columns if c.startswith('dblPred_')]]
+    dbl_list = dblpred_df.index[dblpred_df.sum(1) == 1]
+    adata.obs.loc[dbl_list, ct_groupby] = [dblpred_df.columns[dblpred_df.loc[d,:].argmax()].replace('dblPred_', '') for d in dbl_list]
+
+    if 'log2_total_UMIs' not in adata.obs:
+        adata.obs['log2_total_UMIs'] = np.log2(np.ravel(adata.X.sum(1)))   
+
+    sgl_groups = [v for v in adata.obs[ct_groupby].unique() if len(v.split('_'))==1 and v!='unknown']
+    dbl_groups = [v for v in adata.obs[ct_groupby].unique() if len(v.split('_'))==2]
+
+    sgl_m = pd.Series([adata.obs.loc[adata.obs[ct_groupby]==c, 'log2_total_UMIs'].mean() for c in sgl_groups], index = sgl_groups)
+    dbl_m = pd.Series([adata.obs.loc[adata.obs[ct_groupby]==c, 'log2_total_UMIs'].mean() for c in dbl_groups], index = dbl_groups)
+
+    sgl_vote = pd.DataFrame(np.zeros([len(sgl_groups),len(sgl_groups)]),index=sgl_groups,columns=sgl_groups)
+    dbl_vote = pd.DataFrame(np.zeros([len(sgl_groups),len(sgl_groups)]),index=sgl_groups,columns=sgl_groups)
+
+    for pair in itertools.combinations(sgl_groups, 2):
+
+        c1,c2 = pair
+        sgl_vote.loc[c1,c2] = sgl_m[c1] - sgl_m[c2]
+        sgl_vote.loc[c2,c1] = sgl_m[c2] - sgl_m[c1]
+
+
+    for pair in itertools.combinations(dbl_m.index, 2):
+
+        p1, p2 = pair
+        #print(p1,p2)
+        p1_cts = p1.split('_')
+        p2_cts = p2.split('_')
+
+        vals,cnts = np.unique(p1_cts+p2_cts,return_counts=True)
+        if np.any(cnts>1):
+            p1_cts.remove(vals[cnts>1])
+            p2_cts.remove(vals[cnts>1])
+            #print(dbl_m[p1] - dbl_m[p2])
+            dbl_vote.loc[p1_cts[0],p2_cts[0]] = dbl_m[p1] - dbl_m[p2]
+            dbl_vote.loc[p2_cts[0],p1_cts[0]] = dbl_m[p2] - dbl_m[p1] 
+
+
+    sum_vote = sgl_vote + dbl_vote
+
+    dbl_groups = []
+    for pair in itertools.combinations(sgl_groups, 2):
+        c1,c2 = pair
+        if sum_vote.loc[c1,c2]>0:
+            dbl_groups.append(c2+'_'+c1)
+        else:
+            dbl_groups.append(c1+'_'+c2)
+
+    '''
+    for i,v in enumerate(adata.obs[ct_groupby]):
+        if v not in dbl_groups+sgl_groups and v!='unknown':
+            adata.obs[ct_groupby].iloc[i] = '_'.join([v.split('_')[1],v.split('_')[0]])
+    '''
+    
+    for d in adata.obs_names:
+        v = adata.obs.loc[d,ct_groupby]
+        if v not in dbl_groups+sgl_groups and v!='unknown':
+            adata.obs.loc[d,ct_groupby] = '_'.join([v.split('_')[1],v.split('_')[0]])
+            
+    vals,cnts=np.unique(adata.obs[ct_groupby], return_counts=True)
+    df = pd.DataFrame({'Hetero-dbl-type':vals,'counts':cnts},index=vals)
+    print('Counts of each kind of droplets:')
+    print(df)
+
+
+
+
+
+import statsmodels.api as sm
+
+def save_ratio_in_anndata(adata_mgdic, adata, weight=True):
+    
+    adata.uns['ratio'] = {}
+    for dbl in adata_mgdic:
+        adata.uns['ratio'][dbl] = adata_mgdic[dbl].uns['ratio']
+    
+    r_df,r_serial = harmonize_ratios(adata_mgdic,weight=weight)
+    adata.uns['ratio_summary'] = r_df
+    adata.uns['ratio_serial'] = r_serial
+    
+    
+def harmonize_ratios(adata_mgdic,weight=True):
+
+    dbl_groups = list(adata_mgdic.keys())
+    sgl_groups = list(np.unique([d for term in dbl_groups for d in term.split('_')]))
+
+    r_info = pd.DataFrame(np.zeros([len(dbl_groups), len(sgl_groups)]),columns=sgl_groups)
+
+    #print('Ratios estimated from each kind of heterodbls:')
+    y_list = []
+    for idx,dbl in enumerate(dbl_groups):
+        c1,c2 = dbl.split('_')
+        r_info.loc[idx, c1] = -1
+        r_info.loc[idx, c2] = 1
+        r_tmp = adata_mgdic[dbl].uns['ratio']['R_est']
+        y_list.append(np.log2(r_tmp))
+        #print(c2,':',c1,'=',r_tmp)
+
+    X = r_info.values
+    y = np.array(y_list)
+    
+    if weight:
+        mod_wls = sm.WLS(y, X, weights=np.array([adata_mgdic[a].n_obs for a in adata_mgdic]))
+    else:
+        mod_wls = sm.WLS(y, X, weights=np.array([1]*len(adata_mgdic)))
+    res_wls = mod_wls.fit()
+    # print(res_wls.summary())
+
+    pred_ols = res_wls.get_prediction()
+    # pred_ols.summary_frame()
+    
+    #print('\nAfter regression:')
+    r_corrected = 2**pred_ols.summary_frame()['mean']
+    for idx,dbl in enumerate(dbl_groups):
+        c1,c2 = dbl.split('_')
+        #print(c2,':',c1,'=',r_corrected[idx])
+
+    r_raw = []
+    for dbl in dbl_groups:
+        logUMI_para = adata_mgdic[dbl].uns['para_logUMI']
+        c1,c2 = dbl.split('_')
+        r = 2**(logUMI_para.loc[c2,'mean'] - logUMI_para.loc[c1,'mean'])
+        r_raw.append(r)
+
+    r_df = pd.DataFrame({'Ratio_rawUMI':r_raw,
+                         'Ratio_estimated':[adata_mgdic[d].uns['ratio']['R_est'] for d in dbl_groups],
+                         'Ratio_harmonized':r_corrected.values
+                        },index=[dbl.split('_')[1]+':'+dbl.split('_')[0] for dbl in dbl_groups])
+    
+    r_mat = pd.DataFrame(np.ones([len(sgl_groups),len(sgl_groups)]),index=sgl_groups,columns=sgl_groups)
+    for pair in r_df.index:
+        c1,c2 = pair.split(':')
+        r_mat.loc[c1,c2] = r_df.loc[pair,'Ratio_harmonized']
+        r_mat.loc[c2,c1] = 1/r_df.loc[pair,'Ratio_harmonized']
+
+    sgl_reference = r_mat.columns[r_mat.apply(lambda col: sum(col>=1)==len(col),axis=0)]
+    r_serial = pd.DataFrame(r_mat.loc[:,sgl_reference[0]].sort_values())
+    
+    return r_df,r_serial
 
 
 
