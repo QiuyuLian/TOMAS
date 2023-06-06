@@ -62,9 +62,9 @@ If you find it useful, please cite `our preprint <https://www.researchsquare.com
     :hidden:
 
     TOMAS_basics
-    Total_mRNA_aware_analyses
     Generic_case
     Hashing_case
+    Total_mRNA_aware_analyses
     gui
 
 
