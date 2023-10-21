@@ -1015,14 +1015,17 @@ def harmonize_ratios(adata_mgdic,weight=True):
                          'Ratio_harmonized':r_corrected.values
                         },index=[dbl.split('_')[1]+':'+dbl.split('_')[0] for dbl in dbl_groups])
     
-    r_mat = pd.DataFrame(np.ones([len(sgl_groups),len(sgl_groups)]),index=sgl_groups,columns=sgl_groups)
+    # r_mat = pd.DataFrame(np.ones([len(sgl_groups),len(sgl_groups)]),index=sgl_groups,columns=sgl_groups)
+    r_mat = pd.DataFrame(np.diag(np.ones(len(sgl_groups))),index=sgl_groups,columns=sgl_groups)
     for pair in r_df.index:
         c1,c2 = pair.split(':')
         r_mat.loc[c1,c2] = r_df.loc[pair,'Ratio_harmonized']
         r_mat.loc[c2,c1] = 1/r_df.loc[pair,'Ratio_harmonized']
 
-    sgl_reference = r_mat.columns[r_mat.apply(lambda col: sum(col>=1)==len(col),axis=0)]
+    # sgl_reference = r_mat.columns[r_mat.apply(lambda col: sum(col>=1)==len(col),axis=0)]
+    sgl_reference = r_mat.columns[r_mat.apply(lambda col: sum(col>0)==len(col),axis=0)]
     r_serial = pd.DataFrame(r_mat.loc[:,sgl_reference[0]].sort_values())
+    r_serial = 1/r_serial.iloc[0,0]*r_serial
     
     return r_df,r_serial
 

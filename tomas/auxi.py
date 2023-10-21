@@ -141,7 +141,7 @@ def extract_specific_genes(adata_psgl, groupby, pval=0.001, logfc=0):
         gtmp = gtmp.reset_index(drop=True)
         gtmp_list.append(gtmp.iloc[:topn,:])
 
-    degene_sorted = pd.concat(gtmp_list, 1)
+    degene_sorted = pd.concat(gtmp_list, axis=1)
     
     return degene_sorted
 
